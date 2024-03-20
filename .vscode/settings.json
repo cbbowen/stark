@@ -1,0 +1,17 @@
+{
+	"rust-analyzer.procMacro.ignored": {
+		"leptos_macro": [
+			"server"
+		],
+	},
+	"rust-analyzer.cargo.features": "all",
+	"rust-analyzer.rustfmt.overrideCommand": [
+		"leptosfmt",
+		"--stdin",
+		"--rustfmt"
+	],
+	"editor.tabSize": 3,
+	"editor.indentSize": "tabSize",
+	"editor.detectIndentation": false,
+	"editor.insertSpaces": false,
+}

@@ -1,0 +1,60 @@
+[package]
+name = "stark"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+async-once-cell = "0.5"
+bykey = { git = "https://github.com/cbbowen/bykey.git" }
+futures = "0.3"
+leptos = { version = "0.6", features = ["nightly"] }
+leptos_meta = { version = "0.6", features = ["nightly"] }
+leptos_router = { version = "0.6", features = ["nightly"] }
+leptos-use = "0.10"
+# tap = "1.0"
+thiserror = "1.0"
+# This is included only so we can set the "release_max_level_warn" feature.
+log = { version = "*", features = ["release_max_level_warn"], optional = true }
+tracing = { version = "0.1", features = ["log", "release_max_level_warn"] }
+tracing-log = "0.2"
+tracing-subscriber = "0.3"
+wgpu = { version = "0.19" }
+
+[dev-dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-test = "0.3"
+web-sys = { version = "0.3", features = ["HtmlCanvasElement", "ResizeObserverEntry", "ResizeObserverSize"] }
+pollster = "0.3"
+
+# I'm not sure what the best way to configure dependencies is. In theory,
+# targeting WASM and running in the client are orthogonal. For now, we put
+# anything documented to be WASM-specific in here and use the "csr" feature
+# to gate dependencies that we only need when running in the client.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = { version = "0.1.7", optional = true }
+tracing-wasm = { version = "0.2", optional = true }
+# wasm-timer = { version = "0.2", optional = true }
+
+[features]
+default = ["csr"]
+csr = [
+	"dep:tracing-wasm",
+	# "dep:wasm-timer",
+	"dep:console_error_panic_hook",
+	"leptos/csr",
+	"leptos_meta/csr",
+	"leptos_router/csr",
+	# Enable this to support older browsers.
+	"wgpu/webgl",
+]
+
+[profile.min-size-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[package.metadata.leptos]
+lib-profile-release = "min-size-release"

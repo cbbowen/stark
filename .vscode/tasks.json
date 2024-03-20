@@ -1,0 +1,57 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "rust: cargo check",
+			"group": "build",
+			"type": "cargo",
+			"command": "check",
+			"problemMatcher": [
+				"$rustc"
+			]
+		},
+		{
+			"label": "rust: cargo clippy",
+			"group": "build",
+			"type": "cargo",
+			"command": "clippy",
+			"problemMatcher": [
+				"$rustc"
+			]
+		},
+		{
+			"label": "rust: cargo build",
+			"group": "build",
+			"type": "cargo",
+			"command": "build",
+			"problemMatcher": [
+				"$rustc"
+			]
+		},
+		{
+			"label": "wasm: test no-headless",
+			"group": "test",
+			"env": {
+				"NO_HEADLESS": "1"
+			},
+			"type": "cargo",
+			"command": "test",
+			"args": [
+				"--target",
+				"wasm32-unknown-unknown",
+			],
+			"problemMatcher": ["$rustc"]
+		},
+		{
+			"label": "trunk: serve",
+			"group": "none",
+			"type": "shell",
+			"command": "trunk",
+			"args": [
+				"serve",
+				"--open"
+			],
+			"problemMatcher": []
+		}
+	]
+}
