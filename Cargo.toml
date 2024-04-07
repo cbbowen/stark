@@ -8,14 +8,15 @@ anyhow = "1.0"
 async-once-cell = "0.5"
 bykey = { git = "https://github.com/cbbowen/bykey.git" }
 futures = "0.3"
-leptos = { version = "0.6", features = ["nightly"] }
-leptos_meta = { version = "0.6", features = ["nightly"] }
-leptos_router = { version = "0.6", features = ["nightly"] }
+leptos = { version = "0.6" }
+leptos_meta = { version = "0.6" }
+leptos_router = { version = "0.6" }
 leptos-use = "0.10"
 # tap = "1.0"
 thiserror = "1.0"
 # This is included only so we can set the "release_max_level_warn" feature.
 log = { version = "*", features = ["release_max_level_warn"], optional = true }
+static_assertions = "1.1.0"
 tracing = { version = "0.1", features = ["log", "release_max_level_warn"] }
 tracing-log = "0.2"
 tracing-subscriber = "0.3"

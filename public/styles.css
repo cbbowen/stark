@@ -1,3 +1,6 @@
+/* Consider switching to `stylers`: https://github.com/abishekatp/stylers. */
+
 #render_canvas {
-	width: 100%
+	width: 100%;
+	aspect-ratio: 1.414/1;
 }

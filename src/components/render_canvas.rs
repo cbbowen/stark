@@ -1,193 +1,90 @@
+use crate::components::{ErrorList, Waiting};
+use crate::render;
+use crate::render::wgpu_wrapper;
 use crate::util::*;
 use leptos::*;
-use leptos_use::use_throttle_fn_with_arg;
+use leptos_use::{use_throttle_fn, use_throttle_fn_with_arg};
 use std::{fmt::Debug, ops::Deref, rc::Rc};
 use tracing::{error, info, trace};
 use wasm_bindgen::JsCast;
 
-pub struct RenderContext {
-	instance: wgpu::Instance,
-	adapter: AsyncOnceSignal<Rc<RenderAdapter>>,
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum RenderSurfaceError {
+	#[error("unsupported platform")]
+	UnsupportedPlatform,
+
+	#[error("unsupported surface")]
+	UnsupportedSurface,
+
+	#[error("failed to create surface")]
+	CreateSurfaceError(#[from] wgpu::CreateSurfaceError),
 }
 
-#[derive(Debug)]
-pub struct RenderAdapter {
-	adapter: wgpu::Adapter,
-	device: wgpu::Device,
-	queue: wgpu::Queue,
+static_assertions::assert_impl_all!(RenderSurfaceError: std::error::Error, Send, Sync);
+static_assertions::assert_impl_all!(Result<(), RenderSurfaceError>: leptos::IntoView);
+
+fn create_surface_configuration(
+	context: &render::Context,
+	surface: &render::WgpuSurface,
+	width: u32,
+	height: u32,
+) -> Result<wgpu::SurfaceConfiguration, RenderSurfaceError> {
+	use RenderSurfaceError::*;
+	let config = surface
+		.get_default_config(&*context.adapter, width, height)
+		.ok_or(UnsupportedSurface)?;
+	Ok(wgpu::SurfaceConfiguration {
+		format: wgpu::TextureFormat::Rgba16Float,
+		..config
+	})
 }
 
 #[derive(Debug, Clone)]
 struct RenderSurface {
-	surface: Rc<wgpu::Surface<'static>>,
-	adapter: Rc<RenderAdapter>,
+	context: render::Context,
+	surface: render::WgpuSurface,
+	surface_configuration: leptos::RwSignal<wgpu::SurfaceConfiguration>,
 	// TODO: There's no reason for this to be a separate `Rc` from `surface`.
 	resize: Rc<std::cell::Cell<Option<(u32, u32)>>>,
 }
 
-#[derive(thiserror::Error, Debug)]
-#[error("unsupported platform")]
-struct UnsupportedPlatform;
-
-#[derive(thiserror::Error, Debug)]
-#[error("no matching adapters")]
-struct NoMatchingAdapaters;
-
-#[derive(thiserror::Error, Debug)]
-#[error("unsupported surface")]
-struct UnsupportedSurface;
-
-#[derive(thiserror::Error, Debug)]
-#[error("no supported devices")]
-struct NoSupportedDevices(String);
-
-impl RenderContext {
-	pub fn new() -> Self {
-		let descriptor = wgpu::InstanceDescriptor {
-			backends: wgpu::Backends::all(),
-			#[cfg(debug_assertions)]
-			flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
-			..Default::default()
-		};
-		trace!(
-			{ descriptor = format!("{:?}", descriptor) },
-			"creating wgpu instance"
-		);
-
-		let instance = wgpu::Instance::new(descriptor);
-		info!(
-			{ instance = format!("{:?}", instance) },
-			"created wgpu instance"
-		);
-
-		Self {
-			instance,
-			adapter: AsyncOnceSignal::new(),
-		}
-	}
-
-	pub fn instance(&self) -> &wgpu::Instance {
-		&self.instance
-	}
-
-	pub fn adapter(&self) -> Option<Rc<RenderAdapter>> {
-		self.adapter.get().map(|a| a.clone())
-	}
-
-	async fn create_adapter<'a, 'b>(
-		&'a self,
-		compatible_surface: Option<&'a wgpu::Surface<'b>>,
-	) -> anyhow::Result<RenderAdapter> {
-		let adapter = self
-			.instance
-			.request_adapter(&wgpu::RequestAdapterOptions {
-				compatible_surface,
-				..Default::default()
-			})
-			.await
-			.ok_or(NoMatchingAdapaters)?;
-
-		let device_descriptor = wgpu::DeviceDescriptor {
-			label: None,
-			required_features: wgpu::Features::SHADER_F16, // wgpu::Features::empty(),
-			required_limits: if cfg!(target_arch = "wasm32") {
-				wgpu::Limits::downlevel_webgl2_defaults()
-			} else {
-				wgpu::Limits::default()
-			},
-		};
-		trace!(
-			{ device_descriptor = format!("{:?}", device_descriptor) },
-			"requesting device"
-		);
-
-		let (device, queue) = adapter
-			.request_device(
-				&device_descriptor,
-				None, // Trace path
-			)
-			.await
-			.map_err(|e| NoSupportedDevices(format!("{:?}", e)))?;
-		info!({device = format!("{:?}", device), queue = format!("{:?}", queue)}, "requested device");
-
-		Ok(RenderAdapter {
-			adapter,
-			device,
-			queue,
-		})
-	}
-
-	async fn create_surface(
-		&self,
+impl RenderSurface {
+	#[tracing::instrument(err)]
+	fn new(
+		context: render::Context,
 		canvas: web_sys::HtmlCanvasElement,
-	) -> anyhow::Result<RenderSurface> {
-		#[allow(unused_variables, unused_mut)]
-		let mut surface: anyhow::Result<wgpu::Surface> = Err(UnsupportedPlatform.into());
+	) -> Result<Self, RenderSurfaceError> {
+		use RenderSurfaceError::*;
 
-		let width = canvas.client_width();
-		let height = canvas.client_height();
+		#[allow(unused_variables, unused_mut)]
+		let mut surface = Err(UnsupportedPlatform);
+
+		let width = canvas.client_width() as u32;
+		let height = canvas.client_height() as u32;
 
 		#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 		{
-			surface = Ok(self
+			surface = Ok(context
 				.instance
 				.create_surface(wgpu::SurfaceTarget::Canvas(canvas))?);
 		}
 
 		#[allow(unreachable_code)]
 		let surface = surface?;
-
-		let adapter = self
-			.adapter
-			.get_or_try_init::<anyhow::Error>(async {
-				Ok(Rc::new(self.create_adapter(Some(&surface)).await?))
-			})
-			.await?
-			.clone();
-
-		if !adapter.adapter.is_surface_supported(&surface) {
+		if !context.adapter.is_surface_supported(&surface) {
 			return Err(UnsupportedSurface.into());
 		}
+		let surface = wgpu_wrapper(surface);
 
-		let surface = std::rc::Rc::new(surface);
-		let surface = RenderSurface {
+		let surface_configuration = create_surface_configuration(&context, &surface, width, height)?;
+		surface.configure(&*context.device, &surface_configuration);
+
+		Ok(RenderSurface {
+			context,
 			surface,
-			adapter,
+			surface_configuration: leptos::create_rw_signal(surface_configuration),
 			resize: Rc::new(std::cell::Cell::new(None)),
-		};
-
-		// We could instead pass this in as `resize` which would configure the surface on the next render. But in the interest of failing fast, we explicitly call `configure` here.
-		surface.configure(width as u32, height as u32).ok_or_log();
-
-		Ok(surface)
-	}
-}
-
-impl RenderAdapter {
-	pub fn adapter(&self) -> &wgpu::Adapter {
-		&self.adapter
-	}
-
-	pub fn device(&self) -> &wgpu::Device {
-		&self.device
-	}
-
-	pub fn queue(&self) -> &wgpu::Queue {
-		&self.queue
-	}
-}
-
-impl RenderSurface {
-	pub fn adapter(&self) -> &wgpu::Adapter {
-		self.adapter.adapter()
-	}
-
-	pub fn device(&self) -> &wgpu::Device {
-		self.adapter.device()
-	}
-
-	pub fn queue(&self) -> &wgpu::Queue {
-		self.adapter.queue()
+		})
 	}
 
 	pub fn resized(&self, width: u32, height: u32) {
@@ -195,32 +92,18 @@ impl RenderSurface {
 	}
 
 	#[tracing::instrument(err)]
-	pub fn configure(&self, width: u32, height: u32) -> anyhow::Result<()> {
-		// let config = self
-		// 	.surface
-		// 	.get_default_config(self.adapter(), width, height)
-		// 	.ok_or(UnsupportedSurface)?;
-
-		let caps = self.surface.get_capabilities(self.adapter());
-		let config = wgpu::SurfaceConfiguration {
-			usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-			format: wgpu::TextureFormat::Rgba16Float,
-			width,
-			height,
-			desired_maximum_frame_latency: 2,
-			present_mode: *caps.present_modes.get(0).unwrap(),
-			alpha_mode: wgpu::CompositeAlphaMode::Auto,
-			view_formats: vec![],
-		};
-
-		trace!(?config);
-
-		self.surface.configure(self.adapter.device(), &config);
+	pub fn configure(&self, width: u32, height: u32) -> Result<(), RenderSurfaceError> {
+		let surface_configuration =
+			create_surface_configuration(&self.context, &self.surface, width, height)?;
+		self
+			.surface
+			.configure(&*self.context.device, &surface_configuration);
+		self.surface_configuration.set(surface_configuration);
 		Ok(())
 	}
 
-	#[tracing::instrument(skip(renderable))]
-	pub fn render(&self, renderable: Renderable) -> Result<(), wgpu::SurfaceError> {
+	#[tracing::instrument(err, skip(source))]
+	pub fn render(&self, source: impl FnOnce(wgpu::TextureView)) -> Result<(), wgpu::SurfaceError> {
 		// tracing::trace!("RenderSurface::render");
 
 		if let Some((width, height)) = self.resize.take() {
@@ -234,7 +117,7 @@ impl RenderSurface {
 			.texture
 			.create_view(&wgpu::TextureViewDescriptor::default());
 
-		renderable(view).ok_or_log();
+		source(view);
 		output.present();
 
 		Ok(())
@@ -243,80 +126,127 @@ impl RenderSurface {
 
 impl PartialEq for RenderSurface {
 	fn eq(&self, other: &Self) -> bool {
-		self.surface.global_id() == other.surface.global_id()
+		self.surface == other.surface
 	}
 }
 
-// TODO: This is probably the wrong interface because a `Renderable` may need to construct device-dependent things (e.g. pipelines).
-// One way to resolve this would be to expose the `Device` as a `[Once]Signal` in the context. The caller can then set it up appropriately when the device is set.
-pub type Renderable = Rc<dyn Fn(wgpu::TextureView) -> anyhow::Result<()>>;
+// fn render_canvas_with_context(context: render::Context, source: render::Source, surface_configuration_changed: impl Fn(wgpu::SurfaceConfiguration)) -> impl IntoView {
+// 	tracing::warn!("RenderCanvas::render_canvas");
+// 	let canvas_ref = leptos::create_node_ref();
+// 	let canvas_element = canvas_ref.mounted_element();
+// 	let surface = {
+// 		tracing::warn!("surface = canvas_element.map(...)");
+// 		let context = context.clone();
+// 		canvas_element.map(move |canvas| {
+// 			let canvas: web_sys::HtmlCanvasElement =
+// 				<HtmlElement<html::Canvas> as Deref>::deref(canvas).clone();
+// 			RenderSurface::new(context, canvas)
+// 		})
+// 	};
+// 	surface.get().map(|r| r.ok_or_log());
+
+// 	let try_render = {
+// 		tracing::warn!("building try_render");
+// 		// This function is not reactive.
+// 		let surface = surface.clone();
+// 		let render_once = move || {
+// 			tracing::warn!("try_render");
+// 			let Some(Ok(surface)) = surface.get_untracked() else {
+// 				return;
+// 			};
+// 			match surface.render(|view| source.call(view)) {
+// 				Err(wgpu::SurfaceError::Lost) => {
+// 					if let Some(canvas) = canvas_element.get_untracked() {
+// 						surface
+// 							.configure(canvas.width(), canvas.height())
+// 							.ok_or_log();
+// 					}
+// 				}
+// 				other_result => {
+// 					other_result.ok_or_log();
+// 				}
+// 			}
+// 		};
+// 		use_throttle_fn(render_once, 1000.0)
+// 	};
+
+// 	// Render as an effect. Note that `try_render` calls `renderable.get()`, so this will be
+// 	// re-run whenever the `renderable` changes.
+// 	{
+// 		let try_render = try_render.clone();
+// 		// `create_render_effect` would also work here.
+// 		leptos::create_effect(move |_| try_render());
+// 	}
+
+// 	// On resize, try to render. Note that this will additionally reconfigure if the surface is lost.
+// 	{
+// 		let try_render = try_render.clone();
+// 		leptos_use::use_resize_observer(canvas_ref, move |entries, _| {
+// 			let Some(Ok(surface)) = surface.get_untracked() else {
+// 				return;
+// 			};
+// 			let Some(entry) = entries.last() else {
+// 				return;
+// 			};
+// 			let size = entry.device_pixel_content_box_size().get(0);
+// 			if let Ok(size) = size.dyn_into::<web_sys::ResizeObserverSize>() {
+// 				surface.resized(size.inline_size() as u32, size.block_size() as u32);
+// 				// try_render();
+// 			}
+// 		});
+// 	}
+
+// 	view! { <canvas id="render_canvas" node_ref=canvas_ref></canvas> }
+// }
 
 #[component]
-pub fn RenderCanvas(#[prop(into)] renderable: Signal<Renderable>) -> impl IntoView {
+pub fn RenderCanvas(
+	#[prop(into)] render: render::Source,
+	#[prop(optional)] configured: Option<Callback<wgpu::SurfaceConfiguration>>,
+) -> impl IntoView {
+	tracing::warn!("RenderCanvas");
+	let context: render::Context = expect_context();
+
 	let canvas_ref = leptos::create_node_ref();
 	let canvas_element = canvas_ref.mounted_element();
-
-	let render_context: Rc<RenderContext> = expect_context();
-	let surface = create_local_resource(DistinctSignal::new(canvas_element), move |el| {
-		let ri: Rc<RenderContext> = render_context.clone();
-		async move {
-			if let Distinct(Some(ref el)) = el {
-				let el: web_sys::HtmlCanvasElement =
-					<HtmlElement<html::Canvas> as Deref>::deref(el).clone();
-				ri.create_surface(el).await.ok()
-			} else {
-				None
-			}
-		}
-	});
-	let surface = surface.cache_with().map_get(|oo| oo.and_then(|o| o));
+	let surface = {
+		tracing::warn!("surface = canvas_element.map(...)");
+		let context = context.clone();
+		canvas_element.map(move |canvas| {
+			let canvas: web_sys::HtmlCanvasElement =
+				<HtmlElement<html::Canvas> as Deref>::deref(canvas).clone();
+			RenderSurface::new(context, canvas)
+		})
+	};
 
 	let try_render = {
+		tracing::warn!("building try_render");
 		let surface = surface.clone();
-		let render_once = move |renderable: Renderable| {
-			let surface = surface.clone();
-			if let Some(surface) = surface.get() {
-				match surface.render(renderable) {
-					Err(wgpu::SurfaceError::Lost) => {
-						if let Some(canvas) = canvas_element.get() {
-							surface
-								.configure(canvas.width(), canvas.height())
-								.ok_or_log();
-						}
+		let render_once = move || {
+			tracing::warn!("try_render");
+			let Some(Ok(surface)) = surface.get_untracked() else {
+				return;
+			};
+			match surface.render(|view| render.call(view)) {
+				Err(wgpu::SurfaceError::Lost) => {
+					if let Some(canvas) = canvas_element.get_untracked() {
+						surface
+							.configure(canvas.width(), canvas.height())
+							.ok_or_log();
 					}
-					other_result => {
-						other_result.ok_or_log();
-					}
+				}
+				other_result => {
+					other_result.ok_or_log();
 				}
 			}
 		};
-		let render_once = use_throttle_fn_with_arg(render_once, 30.0);
-		let renderable = renderable.clone();
-		move || render_once(renderable.clone().get())
+		use_throttle_fn(render_once, 1000.0)
 	};
 
-	// Render as an effect. Note that `try_render` calls `renderable.get()`, so this will be re-run whenever the `renderable` changes.
-	{
-		let try_render = try_render.clone();
-		// `create_effect` would also work here, but this may allow us to better levarage parallelism.
-		leptos::create_render_effect(move |_| try_render());
-	}
+	create_effect(move |_| try_render());
 
-	// On resize, try to render. Note that this will additionally reconfigure if the surface is lost.
-	{
-		let try_render = try_render.clone();
-		leptos_use::use_resize_observer(canvas_ref, move |entries, _| {
-			if let Some(surface) = surface.get_untracked() {
-				if let Some(entry) = entries.last() {
-					let size = entry.device_pixel_content_box_size().get(0);
-					if let Ok(size) = size.dyn_into::<web_sys::ResizeObserverSize>() {
-						surface.resized(size.inline_size() as u32, size.block_size() as u32);
-						try_render();
-					}
-				}
-			}
-		});
-	}
+	// TODO: Make `render` reactive?
+	// TODO: Call `configured`.
 
 	view! { <canvas id="render_canvas" node_ref=canvas_ref></canvas> }
 }

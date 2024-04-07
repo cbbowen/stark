@@ -6,7 +6,7 @@ pub(crate) mod util;
 
 mod components;
 mod pages;
-mod renderables;
+mod render;
 
 use leptos::*;
 use leptos_meta::*;
@@ -15,15 +15,12 @@ use leptos_router::*;
 #[component]
 pub fn App() -> impl IntoView {
 	provide_meta_context();
-	provide_context(std::rc::Rc::new(
-		components::render_canvas::RenderContext::new(),
-	));
 
 	view! {
 		<Html lang="en" dir="ltr" attr:data-theme="light"/>
 
 		// sets the document title
-		<Title text="Welcome to Leptos CSR"/>
+		<Title formatter=|page| format!("Stark - {page}")/>
 
 		// injects metadata in the <head> of the page
 		<Meta charset="UTF-8"/>

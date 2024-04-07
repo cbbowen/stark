@@ -29,7 +29,9 @@ fn configure_tracing() -> anyhow::Result<()> {
 fn configure_logging() -> anyhow::Result<()> {
 	configure_tracing()?;
 
-	// Redirect `log` to `tracing`. Another option would be to redirect `tracing` to `log`. Because we enable the "log" feature on the `tracing` crate, that's exactly what will happen if we fail to set `tracing`s global default subscriber above.
+	// Redirect `log` to `tracing`. Another option would be to redirect `tracing` to `log`. Because
+	// we enable the "log" feature on the `tracing` crate, that's exactly what will happen if we fail
+	// to set `tracing`s global default subscriber above.
 	Ok(tracing_log::LogTracer::init()?)
 }
 

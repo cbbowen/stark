@@ -1,6 +1,5 @@
 use std::ops::Deref;
 
-use futures::stream::FlatMap;
 use leptos::*;
 
 mod distinct;
@@ -24,9 +23,15 @@ pub use once::*;
 /// It is useful to think of signals as having two channels:
 ///
 /// 1. A value that can be fetched.
-/// 2. An event that the value may have changed.
+/// 2. An "event" that the value may have changed.
 ///
-/// This caches only the value, forwarding all notifications from the underlying signal. This differs from `leptos::create_memo` which additionally does not notify if the new value is equal to the previous one. In some cases, that is desirable, but it requires the type to implement `PartialEq` which is not always possible. In others, e.g. `Trigger`, it is actively undesirable. Fortunately, Leptos provides a lower level primitive that makes it trivial to separate the two.
+/// `create_cache` caches only the value, forwarding all notifications from the underlying signal.
+/// This differs from `leptos::create_memo` which additionally does not notify if the new value is
+/// equal to the previous one. In some cases, that is desirable, but it requires the type to
+/// implement `PartialEq` which is not always possible. In others, e.g. `Trigger`, it is actively
+/// undesirable. Fortunately, Leptos provides a lower-level primitive that makes it trivial to
+/// separate the two.
+// TODO: This is a bad name.
 pub fn create_cache<T>(f: impl Fn() -> T + 'static) -> Memo<T> {
 	create_owning_memo(move |_| (f(), true))
 }
@@ -88,7 +93,8 @@ impl<S: SignalGet> SignalGetExt for S {
 pub trait SignalWithExt: SignalWith {
 	/// Caches the value this signal. See `create_cache`.
 	///
-	/// This is also useful for converting from a `SignalWith` to a `SignalGet`, serving a similar purpose to `Iter::cloned`.
+	/// This is also useful for converting from a `SignalWith` to a `SignalGet`, serving a similar
+	/// purpose to `Iter::cloned`.
 	fn cache_with(self) -> Memo<Self::Value>
 	where
 		Self: 'static,
@@ -131,32 +137,16 @@ impl<T: html::ElementDescriptor + 'static> ElementExt<T> for HtmlElement<T> {
 	}
 }
 
-/// Like `create_memo` but with two important differences:
-/// 1. Only produces the first non-`None` value returned by `f`. After this, `f` is not called again, and it will not notify its dependents.
-/// 2. Does not require the signal value to implement `PartialEq`.
-///
-/// This is useful for things that are only expected to change once, like the element of a `NodeRef` and whether or not it is mounted.
-fn create_once_signal<T: Clone + 'static>(f: impl Fn() -> Option<T> + 'static) -> Memo<Option<T>> {
-	create_owning_memo(move |p| {
-		if let Some(Some(p)) = p {
-			(Some(p), false)
-		} else {
-			let v = f();
-			let changed = v.is_some();
-			(v, changed)
-		}
-	})
-}
-
 pub trait NodeRefExt<T: html::ElementDescriptor> {
-	/// Runs the provided closure when the `HtmlElement` connected o the  `NodeRef` is first mounted to the DOM.
+	/// Runs the provided closure when the `HtmlElement` connected o the  `NodeRef` is first mounted
+	/// to the DOM.
 	fn on_mount(self, f: impl FnOnce(HtmlElement<T>) + 'static);
 
 	/// Gets the underlying `RwSignal` for the element.
 	fn element(&self) -> &RwSignal<Option<HtmlElement<T>>>;
 
 	/// Creates a signal that provides the `HtmlElement` once it is mounted to the DOM.
-	fn mounted_element(self) -> Memo<Option<HtmlElement<T>>>;
+	fn mounted_element(self) -> OnceMemo<HtmlElement<T>>;
 
 	fn is_mounted(self) -> impl SignalGet<Value = bool>;
 }
@@ -176,10 +166,10 @@ impl<T: html::ElementDescriptor + Clone + 'static> NodeRefExt<T> for NodeRef<T> 
 		self.mounted_element().map_get(|o| o.is_some())
 	}
 
-	fn mounted_element(self) -> Memo<Option<HtmlElement<T>>> {
-		let element = create_once_signal(self.clone());
-		create_once_signal(move || {
-			element().and_then(|e| {
+	fn mounted_element(self) -> OnceMemo<HtmlElement<T>> {
+		let element = OnceMemo::new(move || self.get());
+		OnceMemo::new(move || {
+			element.get().and_then(|e| {
 				if e.is_mounted() {
 					Some(e)
 				} else {

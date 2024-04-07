@@ -1,27 +1,30 @@
 use crate::components::*;
+use crate::render;
 use crate::util::*;
 use leptos::*;
 use render_canvas::*;
 use std::rc::Rc;
+use leptos_meta::*;
 
-fn test_renderable() -> Renderable {
-	let render_context: Rc<RenderContext> = expect_context();
-	let adapter = render_context.adapter();
 
-	if adapter.is_none() {
-		return Rc::new(|_view: wgpu::TextureView| Ok(()));
-	}
-	let adapter = adapter.unwrap();
+fn test_source() -> render::Source {
+	tracing::warn!("test_source");
+	let context: render::Context = expect_context();
 
-	let device = adapter.device();
+	// let redraw_trigger = create_trigger();
+	// let interval = std::time::Duration::from_millis(1000);
+	// set_interval_and_clean_up(move || redraw_trigger.notify(), interval).ok_or_log();
+
+	let device = context.device.clone();
 	let shader_module =
-		device.create_shader_module(wgpu::include_wgsl!("../renderables/shaders.wgsl"));
-	let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-		label: Some("Render Pipeline Layout"),
-		bind_group_layouts: &[],
-		push_constant_ranges: &[],
-	});
-	let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+		device.create_shader_module(wgpu::include_wgsl!("../render/shaders.wgsl"));
+	let render_pipeline_layout =
+		device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+			label: Some("Render Pipeline Layout"),
+			bind_group_layouts: &[],
+			push_constant_ranges: &[],
+		});
+	let render_pipeline = Rc::new(device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 		label: Some("Render Pipeline"),
 		layout: Some(&render_pipeline_layout),
 		vertex: wgpu::VertexState {
@@ -52,10 +55,12 @@ fn test_renderable() -> Renderable {
 		depth_stencil: None,
 		multisample: wgpu::MultisampleState::default(),
 		multiview: None,
-	});
+	}));
 
-	let renderable = move |view: wgpu::TextureView| {
-		let device = adapter.device();
+	leptos::Callback::new(move |view: wgpu::TextureView| {
+		tracing::warn!("test_source::render");
+		// redraw_trigger.track();
+		
 		let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
 			label: Some("Render Encoder"),
 		});
@@ -86,26 +91,44 @@ fn test_renderable() -> Renderable {
 			render_pass.set_pipeline(&render_pipeline);
 			render_pass.draw(0..3, 0..1);
 		}
+		context.queue.submit(std::iter::once(encoder.finish()));
+	})
+}
 
-		// submit will accept anything that implements IntoIter
-		adapter.queue().submit(std::iter::once(encoder.finish()));
-		Ok(())
-	};
-	Rc::new(renderable)
+#[component]
+pub fn CanvasComponent() -> impl IntoView {
+	// let test_renderable = create_cache(test_renderable);
+	// let (renderable, set_renderable) =
+	// create_signal::<render_canvas::Renderable>(test_renderable());
+
+	// let interval = std::time::Duration::from_millis(1000);
+	// set_interval_and_clean_up(move || set_renderable(test_renderable()), interval).ok_or_log();
+
+	let render: render::Source = test_source();
+	view! {
+		<div>
+			"CanvasComponent"
+			<RenderCanvas render/>
+		</div>
+	}
 }
 
 #[component]
 pub fn Home() -> impl IntoView {
-	let test_renderable = create_cache(test_renderable);
-	let (renderable, set_renderable) = create_signal::<render_canvas::Renderable>(test_renderable());
-
-	let interval = std::time::Duration::from_millis(1000);
-	set_interval_and_clean_up(move || set_renderable(test_renderable()), interval).ok_or_log();
-
-	view! { <div>"Bruh." <RenderCanvas renderable=renderable/></div> }
+	view! {
+		<Title text="Home"/>
+		<RenderContextProvider>
+			<div>
+				<CanvasComponent/>
+			</div>
+		</RenderContextProvider>
+	}
 }
 
 #[component]
 pub fn NotFound() -> impl IntoView {
-	view! { "Not found" }
+	view! {
+		<Title text="Not found"/>
+		"Not found"
+	}
 }
