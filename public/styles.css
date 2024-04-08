@@ -1,6 +1,6 @@
 /* Consider switching to `stylers`: https://github.com/abishekatp/stylers. */
 
-#render_canvas {
+.RenderSurface {
 	width: 100%;
 	aspect-ratio: 1.414/1;
 }

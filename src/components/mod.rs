@@ -1,8 +1,10 @@
-pub mod render_canvas;
-pub use render_canvas::*;
+mod render_surface;
+pub use render_surface::*;
 
-pub mod render_context_provider;
+mod render_context_provider;
 pub use render_context_provider::*;
 
-mod fallback;
-pub use fallback::*;
+pub mod fallback;
+
+mod canvas;
+pub use canvas::*;

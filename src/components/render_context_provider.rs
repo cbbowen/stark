@@ -1,13 +1,20 @@
-use super::*;
 use crate::util::*;
 use leptos::*;
 
 /// Unconditionally provides a `render::Context` context to its descendants. All `RenderCanvas`'s
 /// should have this as an ancestor.
 #[component]
-pub fn RenderContextProvider(children: ChildrenFn) -> impl IntoView {
-	let context = leptos::create_local_resource(|| (), |_| crate::render::Context::new());
-	let children = move || {
+pub fn RenderContextProvider<ErrorFallback, ErrorFallbackResult>(
+	#[prop(optional, into)] initializing_fallback: ViewFn,
+	error_fallback: ErrorFallback,
+	children: ChildrenFn,
+) -> impl IntoView
+where
+	ErrorFallback: Fn(RwSignal<Errors>) -> ErrorFallbackResult + 'static,
+	ErrorFallbackResult: IntoView + 'static,
+{
+	let context = create_local_resource(|| (), |_| crate::render::Context::new());
+	let children = create_derived(move || {
 		let children = children.clone();
 		context.get().as_ref().map(move |context| {
 			let context = context.clone();
@@ -16,18 +23,15 @@ pub fn RenderContextProvider(children: ChildrenFn) -> impl IntoView {
 				view! { <Provider value=context>{children()}</Provider> }
 			})
 		})
-	};
-	let children = create_cache(children);
+	});
+
+	let error_fallback = Callback::new(error_fallback);
 
 	view! {
-		<Suspense fallback=|| {
-			view! { <Waiting/> }
-		}>
-			<ErrorBoundary fallback=|errors| {
-				view! { <ErrorList errors/> }
-			}>
-				{children}
-			</ErrorBoundary>
+		<Suspense fallback=initializing_fallback>
+			<ErrorBoundary fallback=move |errors| {
+				error_fallback.call(errors)
+			}>{children}</ErrorBoundary>
 		</Suspense>
 	}
 }

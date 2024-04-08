@@ -1,7 +1,3 @@
-#![feature(unboxed_closures)]
-#![feature(fn_traits)]
-#![feature(associated_type_bounds)]
-
 pub(crate) mod util;
 
 mod components;

@@ -1,8 +1,8 @@
 use leptos::*;
 
 #[component]
-pub fn Waiting() -> impl IntoView {
-	view! { "Loading..." }
+pub fn Initializing() -> impl IntoView {
+	view! { "Initializing..." }
 }
 
 #[component]
