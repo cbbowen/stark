@@ -4,7 +4,7 @@ use leptos::*;
 #[error("no global tracing subscriber set")]
 struct NoTracingSubscriber;
 
-fn configure_tracing() -> anyhow::Result<()> {
+fn init_tracing() -> anyhow::Result<()> {
 	let result = Err(NoTracingSubscriber);
 
 	#[cfg(target_arch = "wasm32")]
@@ -26,21 +26,24 @@ fn configure_tracing() -> anyhow::Result<()> {
 	Ok(result?)
 }
 
-fn configure_logging() -> anyhow::Result<()> {
-	configure_tracing()?;
+fn init_logging() -> anyhow::Result<()> {
+	init_tracing()?;
 
 	// Redirect `log` to `tracing`. Another option would be to redirect `tracing` to `log`. Because
 	// we enable the "log" feature on the `tracing` crate, that's exactly what will happen if we fail
 	// to set `tracing`s global default subscriber above.
-	Ok(tracing_log::LogTracer::init()?)
+	#[cfg(feature = "log")]
+	tracing_log::LogTracer::init()?;
+
+	Ok(())
 }
 
 fn main() {
 	#[cfg(target_arch = "wasm32")]
 	console_error_panic_hook::set_once();
 
-	if let Err(error) = configure_logging() {
-		// We can technically continue without logging.
+	if let Err(error) = init_logging() {
+		// We can technically continue without any logging.
 		tracing::error!(error = error.to_string());
 	}
 

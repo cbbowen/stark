@@ -3,6 +3,14 @@ pub(crate) mod util;
 mod components;
 mod pages;
 mod render;
+mod engine;
+mod geom;
+
+mod wgpu_context;
+pub use wgpu_context::*;
+
+#[cfg(test)]
+pub mod test;
 
 use leptos::*;
 use leptos_meta::*;
@@ -15,10 +23,9 @@ pub fn App() -> impl IntoView {
 	view! {
 		<Html lang="en" dir="ltr" attr:data-theme="light"/>
 
-		// sets the document title
 		<Title formatter=|page| format!("Stark - {page}")/>
 
-		// injects metadata in the <head> of the page
+		// Inject metadata in the <head> tag.
 		<Meta charset="UTF-8"/>
 		<Meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 

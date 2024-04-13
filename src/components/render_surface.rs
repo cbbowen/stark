@@ -1,6 +1,6 @@
-use crate::render;
-use crate::render::wgpu_wrapper;
+use crate::*;
 use crate::util::*;
+use std::rc::Rc;
 use leptos::*;
 use leptos_use::{use_debounce_fn, use_throttle_fn_with_arg};
 use std::{fmt::Debug, ops::Deref};
@@ -22,11 +22,13 @@ enum RenderSurfaceError {
 static_assertions::assert_impl_all!(RenderSurfaceError: std::error::Error, Send, Sync);
 static_assertions::assert_impl_all!(Result<(), RenderSurfaceError>: leptos::IntoView);
 
+pub type WgpuSurface = Rc<wgpu::Surface<'static>>;
+
 #[tracing::instrument(err)]
 fn create_surface(
-	context: render::Context,
+	context: Rc<WgpuContext>,
 	element: web_sys::HtmlCanvasElement,
-) -> Result<render::WgpuSurface, RenderSurfaceError> {
+) -> Result<WgpuSurface, RenderSurfaceError> {
 	use RenderSurfaceError::*;
 
 	#[allow(unused_variables, unused_mut)]
@@ -41,32 +43,37 @@ fn create_surface(
 
 	#[allow(unreachable_code)]
 	let surface = surface?;
-	if !context.adapter.is_surface_supported(&surface) {
+	if !context.adapter().is_surface_supported(&surface) {
 		return Err(UnsupportedSurface.into());
 	}
-	let surface = wgpu_wrapper(surface);
+	let surface = Rc::new(surface);
 
 	Ok(surface)
 }
 
 /// Argument tuple to `ConfigureCallback`.
-pub type ConfigureArgs = (render::WgpuSurface, u32, u32);
+pub type ConfigureArgs = (WgpuSurface, u32, u32);
 
 /// Callback type which determines the surface configuration.
 pub type ConfigureCallback = Callback<ConfigureArgs, Option<wgpu::SurfaceConfiguration>>;
 
+/// Callback type which renders to a texture view.
+pub type RenderCallback = leptos::Callback<wgpu::TextureView>;
+
 #[component]
 pub fn RenderSurface(
-	#[prop(into)] render: MaybeSignal<render::RenderCallback>,
+	#[prop(optional, into)] node_ref: Option<NodeRef<leptos::html::Canvas>>,
+	#[prop(into)] render: MaybeSignal<RenderCallback>,
 	#[prop(optional, into)] configure: Option<ConfigureCallback>,
 	#[prop(optional, into)] configured: Option<Callback<wgpu::SurfaceConfiguration>>,
+	#[prop(optional, into)] resized: Option<Callback<(u32, u32)>>,
 	#[prop(default = 250.0, into)] min_configure_interval: f64,
 	#[prop(default = 30.0, into)] min_render_interval: f64,
 ) -> impl IntoView {
-	let context: render::Context = expect_context();
+	let context: Rc<WgpuContext> = expect_context();
 
-	let element_node_ref = leptos::create_node_ref();
-	let element = element_node_ref.mounted_element();
+	let node_ref = node_ref.unwrap_or_else(leptos::create_node_ref);
+	let element = node_ref.mounted_element();
 	let element = element.map(move |e| <HtmlElement<html::Canvas> as Deref>::deref(e).clone());
 	let surface = {
 		let context = context.clone();
@@ -75,11 +82,11 @@ pub fn RenderSurface(
 
 	// Default to the default surface configuration.
 	let configure = {
-		let adapter = context.adapter.clone();
+		let context = context.clone();
 		configure.unwrap_or(
 			(move |args: ConfigureArgs| {
 				let (surface, width, height) = args;
-				surface.get_default_config(&*adapter, width, height)
+				surface.get_default_config(context.adapter(), width, height)
 			})
 			.into(),
 		)
@@ -104,6 +111,13 @@ pub fn RenderSurface(
 	};
 
 	let (size, write_resize) = create_signal::<Option<(u32, u32)>>(None);
+	let write_resize = move |width, height| {
+		let size = (width, height);
+		write_resize.set(Some(size));
+		if let Some(resized) = &resized {
+			resized.call(size);
+		}
+	};
 	create_render_effect(move |_| {
 		if size.get().is_some() {
 			set_needs_reconfigure();
@@ -111,22 +125,22 @@ pub fn RenderSurface(
 	});
 	create_render_effect(move |_| {
 		if let Some(element) = element.get() {
-			write_resize.set(Some((
+			write_resize(
 				element.client_width() as u32,
 				element.client_height() as u32,
-			)));
+			);
 		}
 	});
 
 	let try_reconfigure = {
-		let device = context.device.clone();
+		let context = context.clone();
 		move |args: ConfigureArgs| -> bool {
 			let surface = args.0.clone();
 			let Some(configuration) = configure.call(args.clone()) else {
 				tracing::warn!(?args, "Failed to configure surface");
 				return false;
 			};
-			surface.configure(&*device, &configuration);
+			surface.configure(context.device(), &configuration);
 			clear_needs_reconfigure();
 			if let Some(configured) = &configured {
 				configured.call(configuration);
@@ -138,8 +152,8 @@ pub fn RenderSurface(
 	// This must not attempt to track signals because it will only be called conditionally. Anything
 	// that should be tracked should instead be an argument.
 	let try_render = move |args: (
-		Option<Result<render::WgpuSurface, RenderSurfaceError>>,
-		render::RenderCallback,
+		Option<Result<WgpuSurface, RenderSurfaceError>>,
+		RenderCallback,
 		bool,
 	)| {
 		let (surface, render, needs_reconfigure) = args;
@@ -198,15 +212,15 @@ pub fn RenderSurface(
 	create_effect(move |_| try_render());
 
 	// On resize, try to render. Note that this will additionally reconfigure if the surface is lost.
-	leptos_use::use_resize_observer(element_node_ref, move |entries, _| {
+	leptos_use::use_resize_observer(node_ref, move |entries, _| {
 		let Some(entry) = entries.last() else {
 			return;
 		};
 		let size = entry.device_pixel_content_box_size().get(0);
 		if let Ok(size) = size.dyn_into::<web_sys::ResizeObserverSize>() {
-			write_resize.set(Some((size.inline_size() as u32, size.block_size() as u32)));
+			write_resize(size.inline_size() as u32, size.block_size() as u32);
 		}
 	});
 
-	view! { <canvas class="RenderSurface" node_ref=element_node_ref></canvas> }
+	view! { <canvas class="RenderSurface" node_ref=node_ref></canvas> }
 }

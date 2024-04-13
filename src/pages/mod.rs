@@ -1,6 +1,17 @@
 use crate::components::*;
 use leptos::*;
 use leptos_meta::*;
+use crate::*;
+
+#[component]
+pub fn ShaderModulesProvider(children: Children) -> impl IntoView
+{
+	run_as_child(move || {
+		let context: std::rc::Rc<WgpuContext> = expect_context();
+		provide_context(render::Resources::new(context.device()));
+		children()
+	})
+}
 
 #[component]
 pub fn Home() -> impl IntoView {
@@ -8,14 +19,16 @@ pub fn Home() -> impl IntoView {
 		<Title text="Home"/>
 		<RenderContextProvider
 			initializing_fallback=|| {
-				view! { <fallback::Initializing></fallback::Initializing> }
+				view! { <fallback::Initializing /> }
 			}
 			error_fallback=|errors| {
 				view! { <fallback::ErrorList errors></fallback::ErrorList> }
 			}>
-			<div class="Home">
-				<Canvas/>
-			</div>
+			<ShaderModulesProvider>
+				<div class="Home">
+					<Canvas/>
+				</div>
+			</ShaderModulesProvider>
 		</RenderContextProvider>
 	}
 }
