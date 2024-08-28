@@ -31,13 +31,13 @@ fn create_surface(
 ) -> Result<WgpuSurface, RenderSurfaceError> {
 	use RenderSurfaceError::*;
 
-	#[allow(unused_variables, unused_mut)]
+	#[allow(unused_assignments, unused_mut)]
 	let mut surface = Err(UnsupportedPlatform);
 
 	#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 	{
 		surface = Ok(context
-			.instance
+			.instance()
 			.create_surface(wgpu::SurfaceTarget::Canvas(element))?);
 	}
 

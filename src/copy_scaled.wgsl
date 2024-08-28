@@ -1,3 +1,8 @@
+@group(0) @binding(0)
+var source_texture: texture_2d<f32>;
+@group(0) @binding(1)
+var source_sampler: sampler;
+
 struct VertexOutput {
 	@builtin(position) clip_position: vec4<f32>,
 	@location(0) tex_coords: vec2<f32>,
@@ -14,11 +19,6 @@ fn vs_main(
 	out.tex_coords = vec2<f32>(x, y);
 	return out;
 }
-
-@group(0) @binding(0)
-var source_texture: texture_2d<f32>;
-@group(0) @binding(1)
-var source_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {

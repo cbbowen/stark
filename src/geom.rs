@@ -11,8 +11,19 @@ fn perp<T: Neg<Output = T>>(v: Vec2<T>) -> Vec2<T> {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Mat4x4fUniform {
-	elements: [[f32; 4]; 4],
+pub struct Mat4x4fUniform([[f32; 4]; 4]);
+
+trait Uniform: bytemuck::Pod + bytemuck::Zeroable {
+	fn wgsl_type_definition() -> &'static str {
+		""
+	}
+	fn wgsl_type_name() -> &'static str;
+}
+
+impl Uniform for Mat4x4fUniform {
+	fn wgsl_type_name() -> &'static str {
+		"mat4x4<f32>"
+	}
 }
 
 /// Linear transformation that preserves orientations.
@@ -147,7 +158,10 @@ impl From<Ortho2f> for Similar2f {
 
 impl Similar2f {
 	pub fn new(orthogonal: impl Into<Ortho2f>, translation: impl Into<Trans2f>) -> Self {
-		Similar2f { orthogonal: orthogonal.into(), translation: translation.into() }
+		Similar2f {
+			orthogonal: orthogonal.into(),
+			translation: translation.into(),
+		}
 	}
 
 	pub fn transform(self, p: Vec2f) -> Vec2f {
@@ -168,14 +182,12 @@ impl Similar2f {
 			orthogonal: Ortho2f(ortho_x),
 			translation: Trans2f(offset),
 		} = self;
-		Mat4x4fUniform {
-			elements: [
-				[ortho_x.x, -ortho_x.y, 0.0, offset.x],
-				[ortho_x.y, ortho_x.x, 0.0, offset.y],
-				[0.0, 0.0, 1.0, 0.0],
-				[0.0, 0.0, 0.0, 1.0],
-			],
-		}
+		Mat4x4fUniform([
+			[ortho_x.x, -ortho_x.y, 0.0, offset.x],
+			[ortho_x.y, ortho_x.x, 0.0, offset.y],
+			[0.0, 0.0, 1.0, 0.0],
+			[0.0, 0.0, 0.0, 1.0],
+		])
 	}
 }
 
@@ -199,16 +211,20 @@ impl<T: Bounded + Copy + Ord> AABox<T> {
 		Self { min, max }
 	}
 
-	pub fn new_empty() -> Self {
+	pub fn empty() -> Self {
 		Self::new(Vec2::max_value(), Vec2::min_value())
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.min.x > self.max.x && self.min.y > self.max.y
 	}
 
 	pub fn expanded_to_contain(self, point: Vec2<T>) -> Self {
 		Self::new(self.min.zip(point, &T::min), self.max.zip(point, &T::max))
 	}
 
-	pub fn new_containing(points: impl Iterator<Item = Vec2<T>>) -> Self {
-		points.fold(Self::new_empty(), |b, p| b.expanded_to_contain(p))
+	pub fn containing(points: impl Iterator<Item = Vec2<T>>) -> Self {
+		points.fold(Self::empty(), |b, p| b.expanded_to_contain(p))
 	}
 
 	pub fn contains(&self, point: Vec2<T>) -> bool {

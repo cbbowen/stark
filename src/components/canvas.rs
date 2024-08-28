@@ -58,6 +58,7 @@ fn canvas_render_pipeline(
 		depth_stencil: None,
 		multisample: wgpu::MultisampleState::default(),
 		multiview: None,
+		cache: None,
 	})
 }
 
@@ -139,8 +140,20 @@ fn create_render_drawing_bind_group(
 ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
 	let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 		entries: &[
+			// chart_to_canvas
 			wgpu::BindGroupLayoutEntry {
 				binding: 0,
+				visibility: wgpu::ShaderStages::VERTEX,
+				ty: wgpu::BindingType::Buffer {
+					ty: wgpu::BufferBindingType::Uniform,
+					has_dynamic_offset: false,
+					min_binding_size: util::nonzero_size_of::<geom::Mat4x4fUniform>(),
+				},
+				count: None,
+			},
+			// chart_texture
+			wgpu::BindGroupLayoutEntry {
+				binding: 1,
 				visibility: wgpu::ShaderStages::FRAGMENT,
 				ty: wgpu::BindingType::Texture {
 					multisampled: false,
@@ -149,8 +162,9 @@ fn create_render_drawing_bind_group(
 				},
 				count: None,
 			},
+			// chart_sampler
 			wgpu::BindGroupLayoutEntry {
-				binding: 1,
+				binding: 2,
 				visibility: wgpu::ShaderStages::FRAGMENT,
 				// This should match the filterable field of the
 				// corresponding Texture entry above.
@@ -160,15 +174,27 @@ fn create_render_drawing_bind_group(
 		],
 		label: Some("texture_bind_group_layout"),
 	});
+	let chart_to_canvas_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+		label: Some("chart_to_canvas"),
+		contents: bytemuck::cast_slice(&[geom::Similar2f::default().to_mat4x4_uniform()]),
+		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+	});
 	let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
 		layout: &bind_group_layout,
 		entries: &[
+			// chart_to_canvas
 			wgpu::BindGroupEntry {
 				binding: 0,
-				resource: wgpu::BindingResource::TextureView(texture_view),
+				resource: chart_to_canvas_buffer.as_entire_binding(),
 			},
+			// chart_texture
 			wgpu::BindGroupEntry {
 				binding: 1,
+				resource: wgpu::BindingResource::TextureView(texture_view),
+			},
+			// chart_sampler
+			wgpu::BindGroupEntry {
+				binding: 2,
 				resource: wgpu::BindingResource::Sampler(sampler),
 			},
 		],
@@ -220,6 +246,7 @@ fn create_drawing_pipeline(
 		depth_stencil: None,
 		multisample: wgpu::MultisampleState::default(),
 		multiview: None,
+		cache: None,
 	})
 }
 
@@ -231,15 +258,21 @@ pub fn Canvas() -> impl IntoView {
 
 	let (drawing_action_bind_group_layout, drawing_action_bind_group, drawing_action_buffer) =
 		create_drawing_action_bind_group(context.device());
-	let drawing_pipeline =
-		create_drawing_pipeline(context.device(), texture_format, &drawing_action_bind_group_layout);
+	let drawing_pipeline = create_drawing_pipeline(
+		context.device(),
+		texture_format,
+		&drawing_action_bind_group_layout,
+	);
 
 	let drawing_texture_view = create_drawing_texture_view(context.device(), texture_format);
 	let drawing_sampler = create_drawing_sampler(context.device());
 	let (render_drawing_bind_group_layout, render_drawing_bind_group) =
 		create_render_drawing_bind_group(context.device(), &drawing_texture_view, &drawing_sampler);
-	let render_pipeline =
-		canvas_render_pipeline(context.device(), texture_format, &render_drawing_bind_group_layout);
+	let render_pipeline = canvas_render_pipeline(
+		context.device(),
+		texture_format,
+		&render_drawing_bind_group_layout,
+	);
 
 	let redraw_trigger = create_trigger();
 	// let interval = std::time::Duration::from_millis(1000);
@@ -255,9 +288,12 @@ pub fn Canvas() -> impl IntoView {
 			let render_drawing_bind_group = render_drawing_bind_group.clone();
 			let render_pipeline = render_pipeline.clone();
 			leptos::Callback::new(move |view: wgpu::TextureView| {
-				let mut encoder = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-					label: Some("Render Encoder"),
-				});
+				let mut encoder =
+					context
+						.device()
+						.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+							label: Some("Render Encoder"),
+						});
 
 				{
 					let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -312,9 +348,12 @@ pub fn Canvas() -> impl IntoView {
 		let drawing_action_buffer = Rc::new(drawing_action_buffer);
 		move |x: f64, y: f64| {
 			let drawing_action_bind_group = drawing_action_bind_group.clone();
-			let mut encoder = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-				label: Some("Drawing Encoder"),
-			});
+			let mut encoder =
+				context
+					.device()
+					.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+						label: Some("Drawing Encoder"),
+					});
 
 			context.queue().write_buffer(
 				&drawing_action_buffer,

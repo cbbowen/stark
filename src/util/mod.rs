@@ -93,3 +93,7 @@ pub fn set_interval_and_clean_up(
 	let handle = set_interval_with_handle(cb, duration)?;
 	Ok(on_cleanup(move || handle.clear()))
 }
+
+pub fn nonzero_size_of<T>() -> Option<std::num::NonZero<u64>> {
+	std::num::NonZero::new(std::mem::size_of::<T>() as u64)
+}

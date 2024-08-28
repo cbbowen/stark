@@ -9,6 +9,8 @@ use std::rc::Rc;
 pub struct WgpuTestContext {
 	context: Rc<WgpuContext>,
 	copy_scaled_shader_module: wgpu::ShaderModule,
+
+	copy_scaled_pipeline: render::Pipeline,
 }
 
 impl Deref for WgpuTestContext {
@@ -161,6 +163,7 @@ impl WgpuTestContext {
 			depth_stencil: None,
 			multisample: wgpu::MultisampleState::default(),
 			multiview: None,
+			cache: None,
 		});
 		let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
 			label: None,
