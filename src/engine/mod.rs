@@ -348,6 +348,7 @@ mod tests {
 				depth_stencil: None,
 				multisample: wgpu::MultisampleState::default(),
 				multiview: None,
+				cache: None,
 			});
 
 		context.render_golden_commands(

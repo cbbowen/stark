@@ -177,7 +177,7 @@ impl BindGroupLayoutEntryBuilder {
 
 #[derive(Debug, Clone)]
 pub struct BindGroupLayoutBuilder {
-	label: Option<&'static str>,
+	label: Option<String>,
 	entries: Vec<BindGroupLayoutEntryBuilder>,
 }
 
@@ -195,7 +195,7 @@ impl BindGroupLayoutBuilder {
 		Self::default()
 	}
 
-	pub fn with_label(mut self, name: &'static str) -> Self {
+	pub fn with_label(mut self, name: String) -> Self {
 		self.label = Some(name);
 		self
 	}
@@ -204,27 +204,47 @@ impl BindGroupLayoutBuilder {
 		self.entries.push(entry);
 		self
 	}
+
+	fn build(
+		self,
+		group_index: u32,
+		device: &wgpu::Device,
+	) -> (BindGroupFactory, Vec<TypeDefinition>) {
+		let mut definitions = Vec::new();
+		let mut entries = Vec::with_capacity(self.entries.len());
+		for (binding_index, entry_builder) in self.entries.iter().enumerate() {
+			let (entry, entry_definitions) =
+				entry_builder.build(group_index as u32, binding_index as u32);
+			entries.push(entry);
+			definitions.extend(entry_definitions);
+		}
+		let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+			label: self.label.as_ref().map(String::as_str),
+			entries: &entries,
+		});
+		(
+			BindGroupFactory {
+				label: self.label,
+				layout: layout.into(),
+			},
+			definitions,
+		)
+	}
 }
 
 #[derive(Debug, Clone)]
-pub struct PipelineBuilder<'a> {
-	name: &'a str,
+pub struct PipelineFactoryBuilder<'a> {
+	label: &'a str,
 	source: &'a str,
 	groups: Vec<BindGroupLayoutBuilder>,
-	targets: Vec<Option<wgpu::ColorTargetState>>,
 }
 
-impl<'a> PipelineBuilder<'a> {
-	pub fn new(name: &'a str, source: &'a str) -> Self {
-		PipelineBuilder {
-			name,
+impl<'a> PipelineFactoryBuilder<'a> {
+	pub fn new(label: &'a str, source: &'a str) -> Self {
+		Self {
+			label,
 			source,
 			groups: Vec::new(),
-			targets: vec![Some(wgpu::ColorTargetState {
-				format: wgpu::TextureFormat::Rgba16Float,
-				blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-				write_mask: wgpu::ColorWrites::ALL,
-			})],
 		}
 	}
 
@@ -233,31 +253,20 @@ impl<'a> PipelineBuilder<'a> {
 		self
 	}
 
-	pub fn with_targets(mut self, targets: Vec<Option<wgpu::ColorTargetState>>) -> Self {
-		self.targets = targets;
-		self
-	}
-
-	pub fn build(self, device: &wgpu::Device) -> Pipeline {
-		// Build the binding group layouts.
+	pub fn build(self, device: &wgpu::Device) -> PipelineFactory {
+		// Build the binding group layouts/builders.
 		let mut definitions = Vec::new();
-		let mut bind_group_layouts = Vec::new();
-		for (group_index, group_builder) in self.groups.iter().enumerate() {
-			let mut entries = Vec::new();
-			for (binding_index, entry_builder) in group_builder.entries.iter().enumerate() {
-				let (entry, entry_definitions) =
-					entry_builder.build(group_index as u32, binding_index as u32);
-				entries.push(entry);
-				definitions.extend(entry_definitions);
-			}
-			bind_group_layouts.push(device.create_bind_group_layout(
-				&wgpu::BindGroupLayoutDescriptor {
-					label: group_builder.label,
-					entries: &entries,
-				},
-			));
+		let mut bind_group_factories = Vec::new();
+		for (group_index, group_builder) in self.groups.into_iter().enumerate() {
+			let (factory, group_definitions) =
+				group_builder.build(group_index as u32, device);
+				bind_group_factories.push(factory);
+			definitions.extend(group_definitions);
 		}
-		let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> = bind_group_layouts.iter().collect();
+		let bind_group_layouts: Vec<&wgpu::BindGroupLayout> = bind_group_factories
+			.iter()
+			.map(|b| b.layout.as_ref())
+			.collect();
 
 		// Build the source with additional definitions.
 		let definitions = unique_definitions(&definitions);
@@ -269,67 +278,92 @@ impl<'a> PipelineBuilder<'a> {
 
 		// Create the shader module.
 		let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-			label: Some(self.name),
+			label: Some(self.label),
 			source: wgpu::ShaderSource::Wgsl(source.into()),
 		});
 
 		// Create the render pipeline.
 		let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-			label: Some(self.name),
-			bind_group_layouts: &bind_group_layout_refs,
+			label: Some(self.label),
+			bind_group_layouts: &bind_group_layouts,
 			push_constant_ranges: &[],
 		});
-		let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-			label: Some("Render Pipeline"),
-			layout: Some(&render_pipeline_layout),
-			vertex: wgpu::VertexState {
-				module: &shader_module,
-				entry_point: "vs_main",
-				compilation_options: Default::default(),
-				buffers: &[],
-			},
-			fragment: Some(wgpu::FragmentState {
-				module: &shader_module,
-				entry_point: "fs_main",
-				compilation_options: Default::default(),
-				targets: &self.targets,
-			}),
-			primitive: wgpu::PrimitiveState {
-				topology: wgpu::PrimitiveTopology::TriangleStrip,
-				strip_index_format: None,
-				front_face: wgpu::FrontFace::Ccw,
-				cull_mode: Some(wgpu::Face::Back),
-				polygon_mode: wgpu::PolygonMode::Fill,
-				unclipped_depth: false,
-				conservative: false,
-			},
-			depth_stencil: None,
-			multisample: wgpu::MultisampleState::default(),
-			multiview: None,
-			cache: None,
-		});
-		let pipeline = Rc::new(pipeline);
 
-		let mut bind_group_builders = Vec::new();
-		for layout in bind_group_layouts {
-			bind_group_builders.push(BindGroupBuilder {
-				layout: Rc::new(layout),
-			})
-		}
-
-		Pipeline {
-			pipeline,
-			bind_group_builders,
+		PipelineFactory {
+			shader_module,
+			render_pipeline_layout,
+			bind_group_factories,
 		}
 	}
 }
 
-pub struct Pipeline {
-	pipeline: Rc<wgpu::RenderPipeline>,
-	bind_group_builders: Vec<BindGroupBuilder>,
+pub struct PipelineFactory {
+	shader_module: wgpu::ShaderModule,
+	render_pipeline_layout: wgpu::PipelineLayout,
+	bind_group_factories: Vec<BindGroupFactory>,
 }
 
 #[derive(Clone)]
-struct BindGroupBuilder {
+pub struct BindGroupFactory {
+	label: Option<String>,
 	layout: Rc<wgpu::BindGroupLayout>,
+}
+
+impl BindGroupFactory {
+	pub fn create(&self, device: &wgpu::Device, entries: &[wgpu::BindGroupEntry]) -> wgpu::BindGroup {
+		device.create_bind_group(&wgpu::BindGroupDescriptor {
+			label: self.label.as_ref().map(String::as_str),
+			layout: &self.layout,
+			entries,
+		})
+	}
+}
+
+impl PipelineFactory {
+	pub fn module(&self) -> &wgpu::ShaderModule {
+		&self.shader_module
+	}
+	pub fn layout(&self) -> &wgpu::PipelineLayout {
+		&self.render_pipeline_layout
+	}
+	pub fn bind_group_factories(&self) -> &[BindGroupFactory] {
+		&self.bind_group_factories
+	}
+	// pub fn create_pipeline(
+	// 	&self,
+	//    device: &wgpu::Device,
+	// 	targets: &[Option<wgpu::ColorTargetState>],
+	// ) -> wgpu::RenderPipeline {
+	// 	self
+	// 		.device
+	// 		.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+	// 			label: None,
+	// 			layout: Some(&self.render_pipeline_layout),
+	// 			vertex: wgpu::VertexState {
+	// 				module: &self.shader_module,
+	// 				entry_point: "vs_main",
+	// 				compilation_options: Default::default(),
+	// 				buffers: &[],
+	// 			},
+	// 			fragment: Some(wgpu::FragmentState {
+	// 				module: &self.shader_module,
+	// 				entry_point: "fs_main",
+	// 				compilation_options: Default::default(),
+	// 				targets,
+	// 			}),
+	// 			primitive: wgpu::PrimitiveState {
+	// 				topology: wgpu::PrimitiveTopology::TriangleStrip,
+	// 				strip_index_format: None,
+	// 				front_face: wgpu::FrontFace::Ccw,
+	// 				cull_mode: Some(wgpu::Face::Back),
+	// 				polygon_mode: wgpu::PolygonMode::Fill,
+	// 				unclipped_depth: false,
+	// 				conservative: false,
+	// 			},
+	// 			depth_stencil: None,
+	// 			multisample: wgpu::MultisampleState::default(),
+	// 			multiview: None,
+	// 			cache: None,
+	// 		})
+	// }
 }
