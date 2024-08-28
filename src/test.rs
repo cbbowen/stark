@@ -153,16 +153,13 @@ impl WgpuTestContext {
 			multiview: None,
 			cache: None,
 		});
-		let bind_group = self.copy_scaled_pipeline_factory.bind_group_factories()[0].create(device, &[
-				wgpu::BindGroupEntry {
-					binding: 0,
-					resource: wgpu::BindingResource::TextureView(&source_view),
-				},
-				wgpu::BindGroupEntry {
-					binding: 1,
-					resource: wgpu::BindingResource::Sampler(&sampler),
-				},
-			]);
+		let bind_group = self.copy_scaled_pipeline_factory.bind_group_factories()[0].create(
+			device,
+			&[
+				wgpu::BindingResource::TextureView(&source_view),
+				wgpu::BindingResource::Sampler(&sampler),
+			],
+		);
 
 		let mut command_encoder = device.create_command_encoder(&Default::default());
 		{

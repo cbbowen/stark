@@ -1,7 +1,9 @@
+use core::slice::SlicePattern;
 use std::fmt::{format, Debug};
 use std::num::NonZero;
 use std::rc::Rc;
 
+use itertools::Itertools;
 use wgpu::BufferBindingType;
 
 /// A WGSL type definition to be added to the shader source file.
@@ -258,9 +260,8 @@ impl<'a> PipelineFactoryBuilder<'a> {
 		let mut definitions = Vec::new();
 		let mut bind_group_factories = Vec::new();
 		for (group_index, group_builder) in self.groups.into_iter().enumerate() {
-			let (factory, group_definitions) =
-				group_builder.build(group_index as u32, device);
-				bind_group_factories.push(factory);
+			let (factory, group_definitions) = group_builder.build(group_index as u32, device);
+			bind_group_factories.push(factory);
 			definitions.extend(group_definitions);
 		}
 		let bind_group_layouts: Vec<&wgpu::BindGroupLayout> = bind_group_factories
@@ -310,7 +311,20 @@ pub struct BindGroupFactory {
 }
 
 impl BindGroupFactory {
-	pub fn create(&self, device: &wgpu::Device, entries: &[wgpu::BindGroupEntry]) -> wgpu::BindGroup {
+	pub fn create(
+		&self,
+		device: &wgpu::Device,
+		resources: &[wgpu::BindingResource],
+	) -> wgpu::BindGroup {
+		let entries: Vec<_> = resources
+			.into_iter()
+			.enumerate()
+			.map(|(binding, resource)| wgpu::BindGroupEntry {
+				binding: binding as u32,
+				resource: resource.clone(),
+			})
+			.collect();
+		let entries = entries.as_slice();
 		device.create_bind_group(&wgpu::BindGroupDescriptor {
 			label: self.label.as_ref().map(String::as_str),
 			layout: &self.layout,
