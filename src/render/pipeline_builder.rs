@@ -1,4 +1,3 @@
-use core::slice::SlicePattern;
 use std::fmt::{format, Debug};
 use std::num::NonZero;
 use std::rc::Rc;
@@ -130,188 +129,64 @@ impl<T: UniformBindingType + 'static> BuildBindingType for UniformBuildBindingTy
 	}
 }
 
-#[derive(Debug, Clone)]
-pub struct BindGroupLayoutEntryBuilder {
+pub struct BindGroupLayoutEntry {
 	name: String,
 	visibility: wgpu::ShaderStages,
-	ty: std::rc::Rc<dyn BuildBindingType>,
+	binding_type: wgpu::BindingType,
 	count: Option<NonZero<u32>>,
+
+	type_definitions: Vec<TypeDefinition>,
+	var_definition: String,
 }
 
-impl BindGroupLayoutEntryBuilder {
-	pub fn new(
-		name: &str,
-		visibility: wgpu::ShaderStages,
-		ty: std::rc::Rc<dyn BuildBindingType>,
-	) -> Self {
+impl BindGroupLayoutEntry {
+	pub fn new(name: &str, visibility: wgpu::ShaderStages, ty: &dyn BuildBindingType) -> Self {
 		Self {
-			name: name.to_owned(),
+			name: name.to_string(),
 			visibility,
-			ty,
+			binding_type: ty.binding_type(),
 			count: None,
+			type_definitions: ty.type_definitions(),
+			var_definition: ty.var_definition(name),
 		}
-	}
-
-	pub fn with_count(mut self, count: u32) -> Self {
-		self.count = std::num::NonZero::new(count);
-		self
-	}
-
-	pub fn build(
-		&self,
-		group_index: u32,
-		binding_index: u32,
-	) -> (wgpu::BindGroupLayoutEntry, Vec<TypeDefinition>) {
-		let entry = wgpu::BindGroupLayoutEntry {
-			binding: binding_index,
-			visibility: self.visibility,
-			ty: self.ty.binding_type(),
-			count: self.count,
-		};
-		let mut definitions = self.ty.type_definitions();
-		definitions.push(TypeDefinition(format!(
-			"@group({group_index}) @binding({binding_index})\n{};\n\n",
-			self.ty.var_definition(&self.name)
-		)));
-		(entry, definitions)
 	}
 }
 
-#[derive(Debug, Clone)]
-pub struct BindGroupLayoutBuilder {
+#[derive(Debug)]
+pub struct BindGroupLayout {
 	label: Option<String>,
-	entries: Vec<BindGroupLayoutEntryBuilder>,
+	layout: wgpu::BindGroupLayout,
+	type_definitions: Vec<TypeDefinition>,
+	var_definitions: Vec<String>,
 }
 
-impl Default for BindGroupLayoutBuilder {
-	fn default() -> Self {
-		Self {
-			label: None,
-			entries: Vec::new(),
-		}
-	}
-}
-
-impl BindGroupLayoutBuilder {
-	pub fn new() -> Self {
-		Self::default()
-	}
-
-	pub fn with_label(mut self, name: String) -> Self {
-		self.label = Some(name);
-		self
-	}
-
-	pub fn add_entry(mut self, entry: BindGroupLayoutEntryBuilder) -> Self {
-		self.entries.push(entry);
-		self
-	}
-
-	fn build(
-		self,
-		group_index: u32,
-		device: &wgpu::Device,
-	) -> (BindGroupFactory, Vec<TypeDefinition>) {
-		let mut definitions = Vec::new();
-		let mut entries = Vec::with_capacity(self.entries.len());
-		for (binding_index, entry_builder) in self.entries.iter().enumerate() {
-			let (entry, entry_definitions) =
-				entry_builder.build(group_index as u32, binding_index as u32);
-			entries.push(entry);
-			definitions.extend(entry_definitions);
+impl BindGroupLayout {
+	pub fn new(device: &wgpu::Device, label: &str, entries: impl IntoIterator<Item=BindGroupLayoutEntry>) -> Self {
+		let label = Some(label.to_string());
+		let mut layout_entries = Vec::new();
+		let mut type_definitions = Vec::new();
+		let mut var_definitions = Vec::new();
+		for (binding, entry) in entries.into_iter().enumerate() {
+			let binding = binding as u32;
+			layout_entries.push(
+				wgpu::BindGroupLayoutEntry {
+					binding,
+					visibility: entry.visibility,
+					ty: entry.binding_type,
+					count: entry.count,
+				}
+			);
+			type_definitions.extend(entry.type_definitions);
+			var_definitions.push(format!("@binding({binding}) {}", entry.var_definition));
 		}
 		let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-			label: self.label.as_ref().map(String::as_str),
-			entries: &entries,
+			label: label.as_deref(),
+			entries: &layout_entries,
 		});
-		(
-			BindGroupFactory {
-				label: self.label,
-				layout: layout.into(),
-			},
-			definitions,
-		)
-	}
-}
-
-#[derive(Debug, Clone)]
-pub struct PipelineFactoryBuilder<'a> {
-	label: &'a str,
-	source: &'a str,
-	groups: Vec<BindGroupLayoutBuilder>,
-}
-
-impl<'a> PipelineFactoryBuilder<'a> {
-	pub fn new(label: &'a str, source: &'a str) -> Self {
-		Self {
-			label,
-			source,
-			groups: Vec::new(),
-		}
+		Self { label, layout, type_definitions, var_definitions }
 	}
 
-	pub fn add_group(mut self, entry: BindGroupLayoutBuilder) -> Self {
-		self.groups.push(entry);
-		self
-	}
-
-	pub fn build(self, device: &wgpu::Device) -> PipelineFactory {
-		// Build the binding group layouts/builders.
-		let mut definitions = Vec::new();
-		let mut bind_group_factories = Vec::new();
-		for (group_index, group_builder) in self.groups.into_iter().enumerate() {
-			let (factory, group_definitions) = group_builder.build(group_index as u32, device);
-			bind_group_factories.push(factory);
-			definitions.extend(group_definitions);
-		}
-		let bind_group_layouts: Vec<&wgpu::BindGroupLayout> = bind_group_factories
-			.iter()
-			.map(|b| b.layout.as_ref())
-			.collect();
-
-		// Build the source with additional definitions.
-		let definitions = unique_definitions(&definitions);
-		let mut source = String::new();
-		for d in definitions {
-			source.push_str(&d.0);
-		}
-		source.push_str(&self.source);
-
-		// Create the shader module.
-		let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-			label: Some(self.label),
-			source: wgpu::ShaderSource::Wgsl(source.into()),
-		});
-
-		// Create the render pipeline.
-		let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-			label: Some(self.label),
-			bind_group_layouts: &bind_group_layouts,
-			push_constant_ranges: &[],
-		});
-
-		PipelineFactory {
-			shader_module,
-			render_pipeline_layout,
-			bind_group_factories,
-		}
-	}
-}
-
-pub struct PipelineFactory {
-	shader_module: wgpu::ShaderModule,
-	render_pipeline_layout: wgpu::PipelineLayout,
-	bind_group_factories: Vec<BindGroupFactory>,
-}
-
-#[derive(Clone)]
-pub struct BindGroupFactory {
-	label: Option<String>,
-	layout: Rc<wgpu::BindGroupLayout>,
-}
-
-impl BindGroupFactory {
-	pub fn create(
+	pub fn create_bind_group(
 		&self,
 		device: &wgpu::Device,
 		resources: &[wgpu::BindingResource],
@@ -324,25 +199,78 @@ impl BindGroupFactory {
 				resource: resource.clone(),
 			})
 			.collect();
-		let entries = entries.as_slice();
+		let entries: &[wgpu::BindGroupEntry<'_>] = entries.as_slice();
 		device.create_bind_group(&wgpu::BindGroupDescriptor {
-			label: self.label.as_ref().map(String::as_str),
+			label: self.label.as_deref(),
 			layout: &self.layout,
 			entries,
 		})
 	}
 }
 
+#[derive(Debug)]
+pub struct PipelineFactory {
+	label: Option<String>,
+	shader_module: wgpu::ShaderModule,
+	render_pipeline_layout: wgpu::PipelineLayout,
+	bind_group_layouts: Vec<BindGroupLayout>,
+}
+
 impl PipelineFactory {
+	fn new_impl(device: &wgpu::Device, label: &str, source: &str, bind_group_layouts: Vec<BindGroupLayout>) -> Self {
+		let label = Some(label.to_string());
+		// Build the source with additional definitions.
+		let mut definitions = Vec::new();
+		for (group, layout) in bind_group_layouts.iter().enumerate() {
+			definitions.extend(layout.type_definitions.iter().cloned());
+			for var_definition in layout.var_definitions.iter() {
+				definitions.push(TypeDefinition(format!("@group({group}) {var_definition};\n\n")));
+			}
+		}
+		let definitions = unique_definitions(&definitions);
+		let mut full_source = String::new();
+		for d in definitions {
+			full_source.push_str(&d.0);
+		}
+		full_source.push_str(source);
+		tracing::info!(?label, ?full_source, "full shader source");
+
+		// Create the shader module.
+		let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+			label: label.as_deref(),
+			source: wgpu::ShaderSource::Wgsl(full_source.into()),
+		});
+
+		// Create the render pipeline.
+		let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+			label: label.as_deref(),
+			bind_group_layouts: &bind_group_layouts.iter().map(|g| &g.layout).collect_vec(),
+			push_constant_ranges: &[],
+		});
+
+		PipelineFactory {
+			label,
+			shader_module,
+			render_pipeline_layout,
+			bind_group_layouts,
+		}
+	}
+
+	pub fn new(device: &wgpu::Device, label: &str, source: &str, bind_group_layouts: impl IntoIterator<Item=BindGroupLayout>) -> Self {
+		let bind_group_layouts: Vec<_> = bind_group_layouts.into_iter().collect();
+		Self::new_impl(device, label, source, bind_group_layouts)
+	}
+
 	pub fn module(&self) -> &wgpu::ShaderModule {
 		&self.shader_module
 	}
 	pub fn layout(&self) -> &wgpu::PipelineLayout {
 		&self.render_pipeline_layout
 	}
-	pub fn bind_group_factories(&self) -> &[BindGroupFactory] {
-		&self.bind_group_factories
+	pub fn bind_group_layouts(&self) -> &[BindGroupLayout] {
+		&self.bind_group_layouts
 	}
+
 	// pub fn create_pipeline(
 	// 	&self,
 	//    device: &wgpu::Device,

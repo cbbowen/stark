@@ -49,23 +49,31 @@ impl WgpuTestContext {
 
 	pub fn new() -> Result<Self, WgpuContextError> {
 		let context = pollster::block_on(WgpuContext::new())?;
+		let device = context.device();
 
-		let copy_scaled_pipeline_factory =
-			render::PipelineFactoryBuilder::new("copy_scaled", include_str!("copy_scaled.wgsl"))
-				.add_group(
-					render::BindGroupLayoutBuilder::new()
-						.add_entry(render::BindGroupLayoutEntryBuilder::new(
-							"source_texture",
-							wgpu::ShaderStages::FRAGMENT,
-							Rc::new(render::Texture2f2BuildBindingType::default()),
-						))
-						.add_entry(render::BindGroupLayoutEntryBuilder::new(
-							"source_sampler",
-							wgpu::ShaderStages::FRAGMENT,
-							Rc::new(render::SamplerBuildBindingType::default()),
-						)),
-				)
-				.build(context.device());
+		let bind_group_layout = render::BindGroupLayout::new(
+			device,
+			"copy_scaled",
+			[
+				render::BindGroupLayoutEntry::new(
+					"source_texture",
+					wgpu::ShaderStages::FRAGMENT,
+					&render::Texture2f2BuildBindingType::default(),
+				),
+				render::BindGroupLayoutEntry::new(
+					"source_sampler",
+					wgpu::ShaderStages::FRAGMENT,
+					&render::SamplerBuildBindingType::default(),
+				),
+			],
+		);
+
+		let copy_scaled_pipeline_factory = render::PipelineFactory::new(
+			device,
+			"copy_scaled",
+			include_str!("copy_scaled.wgsl"),
+			[bind_group_layout],
+		);
 
 		let context = Rc::new(context);
 		Ok(Self {
@@ -153,7 +161,7 @@ impl WgpuTestContext {
 			multiview: None,
 			cache: None,
 		});
-		let bind_group = self.copy_scaled_pipeline_factory.bind_group_factories()[0].create(
+		let bind_group = self.copy_scaled_pipeline_factory.bind_group_layouts()[0].create_bind_group(
 			device,
 			&[
 				wgpu::BindingResource::TextureView(&source_view),
