@@ -98,7 +98,7 @@ pub struct UniformBuildBindingType<T: 'static> {
 
 impl<T: 'static> UniformBuildBindingType<T> {
 	pub fn new() -> Self {
-		UniformBuildBindingType {
+		Self {
 			_t: std::marker::PhantomData,
 		}
 	}

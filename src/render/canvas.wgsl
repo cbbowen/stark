@@ -1,5 +1,9 @@
-@group(0) @binding(0)
-var<uniform> chart_to_canvas: mat4x4<f32>;
+// @group(0) @binding(0)
+// var<uniform> chart_to_canvas: mat4x4<f32>;
+// @group(0) @binding(1)
+// var chart_texture: texture_2d<f32>;
+// @group(0) @binding(2)
+// var chart_sampler: sampler;
 
 // @group(1) @binding(0)
 // var<uniform> canvas_to_view: mat4x4<f32>;
@@ -25,11 +29,6 @@ fn vs_main(
 	out.tex_coords = vec2<f32>(x, y);
 	return out;
 }
-
-@group(0) @binding(1)
-var chart_texture: texture_2d<f32>;
-@group(0) @binding(2)
-var chart_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {

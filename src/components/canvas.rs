@@ -18,26 +18,20 @@ use wgpu::util::DeviceExt;
 fn canvas_render_pipeline(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
-	render_drawing_bind_group_layout: &wgpu::BindGroupLayout,
+	pipeline_factory: &render::PipelineFactory,
 ) -> wgpu::RenderPipeline {
-	let resources: render::Resources = expect_context();
-	let shader_module = resources.canvas_shader_module.clone();
-	let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-		label: Some("Render Pipeline Layout"),
-		bind_group_layouts: &[render_drawing_bind_group_layout],
-		push_constant_ranges: &[],
-	});
+	let module = pipeline_factory.module();
 	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 		label: Some("Render Pipeline"),
-		layout: Some(&render_pipeline_layout),
+		layout: Some(pipeline_factory.layout()),
 		vertex: wgpu::VertexState {
-			module: &shader_module,
+			module,
 			entry_point: "vs_main",
 			compilation_options: Default::default(),
 			buffers: &[],
 		},
 		fragment: Some(wgpu::FragmentState {
-			module: &shader_module,
+			module,
 			entry_point: "fs_main",
 			compilation_options: Default::default(),
 			targets: &[Some(wgpu::ColorTargetState {
@@ -135,72 +129,24 @@ fn create_drawing_action_bind_group(
 
 fn create_render_drawing_bind_group(
 	device: &wgpu::Device,
+	pipeline_factory: &render::PipelineFactory,
 	texture_view: &wgpu::TextureView,
 	sampler: &wgpu::Sampler,
-) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-	let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-		entries: &[
-			// chart_to_canvas
-			wgpu::BindGroupLayoutEntry {
-				binding: 0,
-				visibility: wgpu::ShaderStages::VERTEX,
-				ty: wgpu::BindingType::Buffer {
-					ty: wgpu::BufferBindingType::Uniform,
-					has_dynamic_offset: false,
-					min_binding_size: util::nonzero_size_of::<geom::Mat4x4fUniform>(),
-				},
-				count: None,
-			},
-			// chart_texture
-			wgpu::BindGroupLayoutEntry {
-				binding: 1,
-				visibility: wgpu::ShaderStages::FRAGMENT,
-				ty: wgpu::BindingType::Texture {
-					multisampled: false,
-					view_dimension: wgpu::TextureViewDimension::D2,
-					sample_type: wgpu::TextureSampleType::Float { filterable: true },
-				},
-				count: None,
-			},
-			// chart_sampler
-			wgpu::BindGroupLayoutEntry {
-				binding: 2,
-				visibility: wgpu::ShaderStages::FRAGMENT,
-				// This should match the filterable field of the
-				// corresponding Texture entry above.
-				ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-				count: None,
-			},
-		],
-		label: Some("texture_bind_group_layout"),
-	});
+) -> wgpu::BindGroup {
 	let chart_to_canvas_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("chart_to_canvas"),
 		contents: bytemuck::cast_slice(&[geom::Similar2f::default().to_mat4x4_uniform()]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
-	let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-		layout: &bind_group_layout,
-		entries: &[
+	pipeline_factory.bind_group_layouts()[0].create_bind_group(device, &[
 			// chart_to_canvas
-			wgpu::BindGroupEntry {
-				binding: 0,
-				resource: chart_to_canvas_buffer.as_entire_binding(),
-			},
+			chart_to_canvas_buffer.as_entire_binding(),
 			// chart_texture
-			wgpu::BindGroupEntry {
-				binding: 1,
-				resource: wgpu::BindingResource::TextureView(texture_view),
-			},
+			wgpu::BindingResource::TextureView(texture_view),
 			// chart_sampler
-			wgpu::BindGroupEntry {
-				binding: 2,
-				resource: wgpu::BindingResource::Sampler(sampler),
-			},
+			wgpu::BindingResource::Sampler(sampler),
 		],
-		label: Some("texture_bind_group"),
-	});
-	(bind_group_layout, bind_group)
+	)
 }
 
 fn create_drawing_pipeline(
@@ -253,6 +199,7 @@ fn create_drawing_pipeline(
 #[component]
 pub fn Canvas() -> impl IntoView {
 	let context: Rc<WgpuContext> = expect_context();
+	let resources: render::Resources = expect_context();
 
 	let texture_format = wgpu::TextureFormat::Rgba16Float;
 
@@ -266,12 +213,12 @@ pub fn Canvas() -> impl IntoView {
 
 	let drawing_texture_view = create_drawing_texture_view(context.device(), texture_format);
 	let drawing_sampler = create_drawing_sampler(context.device());
-	let (render_drawing_bind_group_layout, render_drawing_bind_group) =
-		create_render_drawing_bind_group(context.device(), &drawing_texture_view, &drawing_sampler);
+	let render_drawing_bind_group =
+		create_render_drawing_bind_group(context.device(), &resources.render_drawing_pipeline_factory, &drawing_texture_view, &drawing_sampler);
 	let render_pipeline = canvas_render_pipeline(
 		context.device(),
 		texture_format,
-		&render_drawing_bind_group_layout,
+		&resources.render_drawing_pipeline_factory
 	);
 
 	let redraw_trigger = create_trigger();

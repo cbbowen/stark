@@ -1,64 +1,49 @@
+use crate::geom::Mat4x4fUniform;
+
+use super::pipeline_builder::*;
 use std::rc::Rc;
 
 /// Resources that only need to be loaded once for a given device.
 #[derive(Debug, Clone)]
 pub struct Resources {
-	// Shader modules.
-	pub canvas_shader_module: Rc<wgpu::ShaderModule>,
-	pub drawing_shader_module: Rc<wgpu::ShaderModule>,
+	// Pipeline factories.
+	pub render_drawing_pipeline_factory: Rc<PipelineFactory>,
 
-	// Bind group layouts.
-	pub chart_bind_group_layout: Rc<wgpu::BindGroupLayout>,
+	// Shader modules.
+	pub drawing_shader_module: Rc<wgpu::ShaderModule>,
 }
 
 impl Resources {
 	pub fn new(device: &wgpu::Device) -> Self {
+		let render_drawing_pipeline_factory = PipelineFactory::new(device, "canvas", include_str!("canvas.wgsl"), [
+			BindGroupLayout::new(
+				device,
+				"texture",
+				[
+					BindGroupLayoutEntry::new(
+						"chart_to_canvas",
+						wgpu::ShaderStages::VERTEX,
+						&UniformBuildBindingType::<Mat4x4fUniform>::new(),
+					),
+					BindGroupLayoutEntry::new(
+						"chart_texture",
+						wgpu::ShaderStages::FRAGMENT,
+						&Texture2f2BuildBindingType::default(),
+					),
+					BindGroupLayoutEntry::new(
+						"chart_sampler",
+						wgpu::ShaderStages::FRAGMENT,
+						&SamplerBuildBindingType::default(),
+					),
+				])
+		]).into();
 		Resources {
+			render_drawing_pipeline_factory,
+
 			// Shader modules.
-			canvas_shader_module: Rc::new(
-				device.create_shader_module(wgpu::include_wgsl!("canvas.wgsl")),
-			),
 			drawing_shader_module: Rc::new(
 				device.create_shader_module(wgpu::include_wgsl!("drawing.wgsl")),
 			),
-
-			// Bind group layouts.
-			chart_bind_group_layout: Rc::new(device.create_bind_group_layout(
-				&wgpu::BindGroupLayoutDescriptor {
-					label: Some("chart_bind_group_layout"),
-					entries: &[
-						// canvas_to_view
-					wgpu::BindGroupLayoutEntry {
-						binding: 0,
-						visibility: wgpu::ShaderStages::VERTEX,
-						ty: wgpu::BindingType::Buffer {
-							ty: wgpu::BufferBindingType::Uniform,
-							has_dynamic_offset: false,
-							min_binding_size: None,
-						},
-						count: None,
-					},
-					// chart_texture
-					wgpu::BindGroupLayoutEntry {
-						binding: 1,
-						visibility: wgpu::ShaderStages::FRAGMENT,
-						ty: wgpu::BindingType::Texture {
-							multisampled: false,
-							view_dimension: wgpu::TextureViewDimension::D2,
-							sample_type: wgpu::TextureSampleType::Float { filterable: true },
-						},
-						count: None,
-					},
-					// chart_sampler
-					wgpu::BindGroupLayoutEntry {
-						binding: 2,
-						visibility: wgpu::ShaderStages::FRAGMENT,
-						ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-						count: None,
-					},
-					],
-				},
-			)),
 		}
 	}
 }
