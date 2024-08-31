@@ -13,19 +13,6 @@ fn perp<T: Neg<Output = T>>(v: Vec2<T>) -> Vec2<T> {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Mat4x4fUniform([[f32; 4]; 4]);
 
-// trait Uniform: bytemuck::Pod + bytemuck::Zeroable {
-// 	fn wgsl_type_definition() -> &'static str {
-// 		""
-// 	}
-// 	fn wgsl_type_name() -> &'static str;
-// }
-
-// impl Uniform for Mat4x4fUniform {
-// 	fn wgsl_type_name() -> &'static str {
-// 		"mat4x4<f32>"
-// 	}
-// }
-
 impl crate::render::UniformBindingType for Mat4x4fUniform {
 	fn name() -> &'static str {
 		 "mat4x4<f32>"

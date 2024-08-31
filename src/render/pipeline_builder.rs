@@ -7,22 +7,57 @@ use wgpu::BufferBindingType;
 
 /// A WGSL type definition to be added to the shader source file.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct TypeDefinition(String);
+pub struct TypeDefinition(String);
 
-fn unique_definitions(all_definitions: &[TypeDefinition]) -> Vec<TypeDefinition> {
-	let mut definitions = Vec::new();
-	let mut definition_set = std::collections::HashSet::new();
-	for d in all_definitions {
-		if definition_set.insert(d) {
-			definitions.push(d.clone());
+#[derive(Default, Clone)]
+pub struct TypeDefinitions {
+	vec: Vec<TypeDefinition>,
+	set: std::collections::HashSet<TypeDefinition>,
+}
+
+impl Debug for TypeDefinitions {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		self.vec.fmt(fmt)
+	}
+}
+
+impl IntoIterator for TypeDefinitions {
+	type Item = TypeDefinition;
+	type IntoIter = <Vec::<TypeDefinition> as IntoIterator>::IntoIter;
+	fn into_iter(self) -> Self::IntoIter {
+		 self.vec.into_iter()
+	}
+}
+
+impl FromIterator<TypeDefinition> for TypeDefinitions {
+	fn from_iter<I: IntoIterator<Item = TypeDefinition>>(iter: I) -> Self {
+		 let mut result = Self::default();
+		 result.extend(iter);
+		 result
+	}
+}
+
+impl TypeDefinitions {
+	pub fn push(&mut self, d: TypeDefinition) {
+		if self.set.insert(d.clone()) {
+			self.vec.push(d);
 		}
 	}
-	definitions
+
+	pub fn extend<I: IntoIterator<Item = TypeDefinition>>(&mut self, iter: I) {
+		for d in iter {
+			self.push(d)
+		}
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item=&TypeDefinition> {
+		self.vec.iter()
+	}
 }
 
 pub trait BuildBindingType: Debug {
-	fn type_definitions(&self) -> Vec<TypeDefinition> {
-		Vec::new()
+	fn type_definitions(&self) -> TypeDefinitions {
+		TypeDefinitions::default()
 	}
 	fn var_definition(&self, name: &str) -> String;
 	fn binding_type(&self) -> wgpu::BindingType;
@@ -81,8 +116,8 @@ impl BuildBindingType for SamplerBuildBindingType {
 /// Implemented by types which can be used in uniform buffers.
 pub trait UniformBindingType: bytemuck::Pod + bytemuck::Zeroable {
 	fn name() -> &'static str;
-	fn type_definitions() -> Vec<TypeDefinition> {
-		Vec::new()
+	fn type_definitions() -> TypeDefinitions {
+		TypeDefinitions::default()
 	}
 }
 
@@ -112,7 +147,7 @@ impl<T: UniformBindingType + 'static> Debug for UniformBuildBindingType<T> {
 }
 
 impl<T: UniformBindingType + 'static> BuildBindingType for UniformBuildBindingType<T> {
-	fn type_definitions(&self) -> Vec<TypeDefinition> {
+	fn type_definitions(&self) -> TypeDefinitions {
 		T::type_definitions()
 	}
 
@@ -135,7 +170,7 @@ pub struct BindGroupLayoutEntry {
 	binding_type: wgpu::BindingType,
 	count: Option<NonZero<u32>>,
 
-	type_definitions: Vec<TypeDefinition>,
+	type_definitions: TypeDefinitions,
 	var_definition: String,
 }
 
@@ -156,7 +191,7 @@ impl BindGroupLayoutEntry {
 pub struct BindGroupLayout {
 	label: Option<String>,
 	layout: wgpu::BindGroupLayout,
-	type_definitions: Vec<TypeDefinition>,
+	type_definitions: TypeDefinitions,
 	var_definitions: Vec<String>,
 }
 
@@ -164,7 +199,7 @@ impl BindGroupLayout {
 	pub fn new(device: &wgpu::Device, label: &str, entries: impl IntoIterator<Item=BindGroupLayoutEntry>) -> Self {
 		let label = Some(label.to_string());
 		let mut layout_entries = Vec::new();
-		let mut type_definitions = Vec::new();
+		let mut type_definitions = TypeDefinitions::default();
 		let mut var_definitions = Vec::new();
 		for (binding, entry) in entries.into_iter().enumerate() {
 			let binding = binding as u32;
@@ -220,14 +255,13 @@ impl PipelineFactory {
 	fn new_impl(device: &wgpu::Device, label: &str, source: &str, bind_group_layouts: Vec<BindGroupLayout>) -> Self {
 		let label = Some(label.to_string());
 		// Build the source with additional definitions.
-		let mut definitions = Vec::new();
+		let mut definitions = TypeDefinitions::default();
 		for (group, layout) in bind_group_layouts.iter().enumerate() {
 			definitions.extend(layout.type_definitions.iter().cloned());
 			for var_definition in layout.var_definitions.iter() {
 				definitions.push(TypeDefinition(format!("@group({group}) {var_definition};\n\n")));
 			}
 		}
-		let definitions = unique_definitions(&definitions);
 		let mut full_source = String::new();
 		for d in definitions {
 			full_source.push_str(&d.0);
