@@ -8,42 +8,77 @@ use std::rc::Rc;
 pub struct Resources {
 	// Pipeline factories.
 	pub render_drawing_pipeline_factory: Rc<PipelineFactory>,
+	pub drawing_action_pipeline_factory: Rc<PipelineFactory>,
+}
 
-	// Shader modules.
-	pub drawing_shader_module: Rc<wgpu::ShaderModule>,
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct DrawingActionUniform {
+	position: [f32; 2],
+}
+
+impl UniformBindingType for DrawingActionUniform {
+	fn name() -> &'static str {
+		"DrawingActionUniform"
+	}
+
+	fn type_definitions() -> TypeDefinitions {
+		[r#"
+struct DrawingActionUniform {
+	position: vec2<f32>,
+};
+		 "#
+		.to_string()]
+		.into_iter()
+		.collect()
+	}
 }
 
 impl Resources {
 	pub fn new(device: &wgpu::Device) -> Self {
-		let render_drawing_pipeline_factory = PipelineFactory::new(device, "canvas", include_str!("canvas.wgsl"), [
-			BindGroupLayout::new(
-				device,
-				"texture",
-				[
-					BindGroupLayoutEntry::new(
-						"chart_to_canvas",
-						wgpu::ShaderStages::VERTEX,
-						&UniformBuildBindingType::<Mat4x4fUniform>::new(),
-					),
-					BindGroupLayoutEntry::new(
-						"chart_texture",
-						wgpu::ShaderStages::FRAGMENT,
-						&Texture2f2BuildBindingType::default(),
-					),
-					BindGroupLayoutEntry::new(
-						"chart_sampler",
-						wgpu::ShaderStages::FRAGMENT,
-						&SamplerBuildBindingType::default(),
-					),
-				])
-		]).into();
 		Resources {
-			render_drawing_pipeline_factory,
+			render_drawing_pipeline_factory: PipelineFactory::new(
+				device,
+				"canvas",
+				include_str!("canvas.wgsl"),
+				[BindGroupLayout::new(
+					device,
+					"texture",
+					[
+						BindGroupLayoutEntry::new(
+							"chart_to_canvas",
+							wgpu::ShaderStages::VERTEX,
+							&UniformBuildBindingType::<Mat4x4fUniform>::new(),
+						),
+						BindGroupLayoutEntry::new(
+							"chart_texture",
+							wgpu::ShaderStages::FRAGMENT,
+							&Texture2f2BuildBindingType::default(),
+						),
+						BindGroupLayoutEntry::new(
+							"chart_sampler",
+							wgpu::ShaderStages::FRAGMENT,
+							&SamplerBuildBindingType::default(),
+						),
+					],
+				)],
+			).into(),
 
-			// Shader modules.
-			drawing_shader_module: Rc::new(
-				device.create_shader_module(wgpu::include_wgsl!("drawing.wgsl")),
-			),
+			drawing_action_pipeline_factory: PipelineFactory::new(
+				device,
+				"drawing",
+				include_str!("drawing.wgsl"),
+				[BindGroupLayout::new(
+					device,
+					"texture",
+					[BindGroupLayoutEntry::new(
+						"action",
+						wgpu::ShaderStages::VERTEX,
+						&UniformBuildBindingType::<DrawingActionUniform>::new(),
+					)],
+				)],
+			)
+			.into(),
 		}
 	}
 }

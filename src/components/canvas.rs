@@ -97,34 +97,15 @@ struct DrawingActionUniform {
 
 fn create_drawing_action_bind_group(
 	device: &wgpu::Device,
-) -> (wgpu::BindGroupLayout, wgpu::BindGroup, wgpu::Buffer) {
-	let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-		entries: &[wgpu::BindGroupLayoutEntry {
-			binding: 0,
-			visibility: wgpu::ShaderStages::VERTEX,
-			ty: wgpu::BindingType::Buffer {
-				ty: wgpu::BufferBindingType::Uniform,
-				has_dynamic_offset: false,
-				min_binding_size: None,
-			},
-			count: None,
-		}],
-		label: Some("drawing_action_bind_group_layout"),
-	});
+	pipeline_factory: &render::PipelineFactory,
+) -> (wgpu::BindGroup, wgpu::Buffer) {
 	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("drawing_action"),
 		contents: bytemuck::cast_slice(&[DrawingActionUniform::zeroed()]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
-	let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-		layout: &bind_group_layout,
-		entries: &[wgpu::BindGroupEntry {
-			binding: 0,
-			resource: buffer.as_entire_binding(),
-		}],
-		label: Some("drawing_action_bind_group"),
-	});
-	(bind_group_layout, bind_group, buffer)
+	let bind_group = pipeline_factory.bind_group_layouts()[0].create_bind_group(device, &[buffer.as_entire_binding()]);
+	(bind_group, buffer)
 }
 
 fn create_render_drawing_bind_group(
@@ -152,26 +133,20 @@ fn create_render_drawing_bind_group(
 fn create_drawing_pipeline(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
-	drawing_action_bind_group_layout: &wgpu::BindGroupLayout,
+	pipeline_factory: &render::PipelineFactory,
 ) -> wgpu::RenderPipeline {
-	let resources: render::Resources = expect_context();
-	let shader_module = resources.drawing_shader_module;
-	let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-		label: Some("Render Pipeline Layout"),
-		bind_group_layouts: &[drawing_action_bind_group_layout],
-		push_constant_ranges: &[],
-	});
+	let module = pipeline_factory.module();
 	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 		label: Some("Render Pipeline"),
-		layout: Some(&render_pipeline_layout),
+		layout: Some(pipeline_factory.layout()),
 		vertex: wgpu::VertexState {
-			module: &shader_module,
+			module,
 			entry_point: "vs_main",
 			compilation_options: Default::default(),
 			buffers: &[],
 		},
 		fragment: Some(wgpu::FragmentState {
-			module: &shader_module,
+			module,
 			entry_point: "fs_main",
 			compilation_options: Default::default(),
 			targets: &[Some(wgpu::ColorTargetState {
@@ -203,12 +178,12 @@ pub fn Canvas() -> impl IntoView {
 
 	let texture_format = wgpu::TextureFormat::Rgba16Float;
 
-	let (drawing_action_bind_group_layout, drawing_action_bind_group, drawing_action_buffer) =
-		create_drawing_action_bind_group(context.device());
+	let (drawing_action_bind_group, drawing_action_buffer) =
+		create_drawing_action_bind_group(context.device(), &resources.drawing_action_pipeline_factory);
 	let drawing_pipeline = create_drawing_pipeline(
 		context.device(),
 		texture_format,
-		&drawing_action_bind_group_layout,
+		&resources.drawing_action_pipeline_factory,
 	);
 
 	let drawing_texture_view = create_drawing_texture_view(context.device(), texture_format);

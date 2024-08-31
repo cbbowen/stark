@@ -5,9 +5,8 @@ use std::rc::Rc;
 use itertools::Itertools;
 use wgpu::BufferBindingType;
 
-/// A WGSL type definition to be added to the shader source file.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TypeDefinition(String);
+/// A collection of definition to be added to the shader source file.
+pub type TypeDefinition = String;
 
 #[derive(Default, Clone)]
 pub struct TypeDefinitions {
@@ -114,7 +113,9 @@ impl BuildBindingType for SamplerBuildBindingType {
 }
 
 /// Implemented by types which can be used in uniform buffers.
-pub trait UniformBindingType: bytemuck::Pod + bytemuck::Zeroable {
+pub trait UniformBindingType
+//: bytemuck::Pod + bytemuck::Zeroable
+{
 	fn name() -> &'static str;
 	fn type_definitions() -> TypeDefinitions {
 		TypeDefinitions::default()
@@ -259,12 +260,12 @@ impl PipelineFactory {
 		for (group, layout) in bind_group_layouts.iter().enumerate() {
 			definitions.extend(layout.type_definitions.iter().cloned());
 			for var_definition in layout.var_definitions.iter() {
-				definitions.push(TypeDefinition(format!("@group({group}) {var_definition};\n\n")));
+				definitions.push(format!("@group({group}) {var_definition};"));
 			}
 		}
 		let mut full_source = String::new();
 		for d in definitions {
-			full_source.push_str(&d.0);
+			full_source.push_str(&format!("{}\n\n", d));
 		}
 		full_source.push_str(source);
 		tracing::info!(?label, ?full_source, "full shader source");

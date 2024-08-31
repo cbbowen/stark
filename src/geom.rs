@@ -1,12 +1,44 @@
 use cgmath::{num_traits::Inv, prelude::*};
 use std::ops::{Mul, Neg};
 
+use crate::render::UniformBindingType;
+
+impl UniformBindingType for [f32; 2] {
+	fn name() -> &'static str { "vec2<f32>" }
+}
+
 type Vec2<T> = cgmath::Vector2<T>;
 pub type Vec2f = Vec2<f32>;
 pub type Vec2i = Vec2<i32>;
 
-fn perp<T: Neg<Output = T>>(v: Vec2<T>) -> Vec2<T> {
-	Vec2::new(-v.y, v.x)
+impl UniformBindingType for Vec2f {
+	fn name() -> &'static str { "vec2<f32>" }
+}
+
+impl UniformBindingType for Vec2i {
+	fn name() -> &'static str { "vec2<i32>" }
+}
+
+trait Vec2Ext {
+	fn perp(self) -> Self;
+}
+
+impl<T: Neg<Output = T>> Vec2Ext for Vec2<T> {
+	fn perp(self) -> Self {
+		Self::new(-self.y, self.x)
+	}
+}
+
+trait ToUniform {
+	type Uniform: UniformBindingType;
+	fn to_uniform(self) -> Self::Uniform;
+} 
+
+impl ToUniform for Vec2f {
+	type Uniform = [f32; 2];
+	fn to_uniform(self) -> Self::Uniform {
+		 [self.x, self.y]
+	}
 }
 
 #[repr(C)]
@@ -15,7 +47,7 @@ pub struct Mat4x4fUniform([[f32; 4]; 4]);
 
 impl crate::render::UniformBindingType for Mat4x4fUniform {
 	fn name() -> &'static str {
-		 "mat4x4<f32>"
+		"mat4x4<f32>"
 	}
 }
 
@@ -74,7 +106,7 @@ impl Ortho2f {
 
 	pub fn transform(self, p: Vec2f) -> Vec2f {
 		let Vec2 { x, y } = self.applied_to_unit_x();
-		x * p + y * perp(p)
+		x * p + y * p.perp()
 	}
 
 	pub fn inverse(self) -> Self {
