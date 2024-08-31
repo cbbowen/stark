@@ -57,15 +57,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
 
 [[package]]
-name = "approx"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f2a05fd1bd10b2527e20a2cd32d8873d115b8b39fe219ee25f42a8aca6ba278"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -228,6 +219,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b96ec4966b5813e2c0507c1f86115c8c5abaadc3980879c3424042a02fd1ad3"
 
 [[package]]
+name = "case"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd6c0e7b807d60291f42f33f58480c0bfafe28ed08286446f45e463728cf9c1c"
+
+[[package]]
 name = "cc"
 version = "1.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -247,16 +244,6 @@ name = "cfg_aliases"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
-
-[[package]]
-name = "cgmath"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
-dependencies = [
- "approx",
- "num-traits",
-]
 
 [[package]]
 name = "ciborium"
@@ -384,6 +371,12 @@ dependencies = [
  "quote",
  "unicode-xid",
 ]
+
+[[package]]
+name = "const_panic"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7782af8f90fe69a4bb41e460abe1727d493403d8b2cc43201a3a3e906b24379f"
 
 [[package]]
 name = "convert_case"
@@ -571,6 +564,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
+name = "encase"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0265fa0e7bcdb058128cdf7597cdacea42e33911713663a04d971a39cad16afa"
+dependencies = [
+ "const_panic",
+ "encase_derive",
+ "glam",
+ "thiserror",
+]
+
+[[package]]
+name = "encase_derive"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3b6f7502bafc52a60b5582560a2aaee16921eef79a742ae48dd411fe7a9263b"
+dependencies = [
+ "encase_derive_impl",
+]
+
+[[package]]
+name = "encase_derive_impl"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b36f2ddfca91251bed7f931f24b192e4eaf0a0e0fa70cf81cfb1416a1973620e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.76",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -748,6 +773,15 @@ dependencies = [
  "khronos_api",
  "log",
  "xml-rs",
+]
+
+[[package]]
+name = "glam"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "779ae4bf7e8421cf91c0b3b64e7e8b40b862fba4d393f59150042de7c4965a94"
+dependencies = [
+ "bytemuck",
 ]
 
 [[package]]
@@ -2032,9 +2066,10 @@ dependencies = [
  "anyhow",
  "async-once-cell",
  "bytemuck",
- "cgmath",
  "console_error_panic_hook",
+ "encase",
  "futures",
+ "glam",
  "image",
  "itertools 0.13.0",
  "leptos",
@@ -2054,6 +2089,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "wgpu",
+ "wgsl_to_wgpu",
 ]
 
 [[package]]
@@ -2650,6 +2686,20 @@ dependencies = [
  "bitflags 2.6.0",
  "js-sys",
  "web-sys",
+]
+
+[[package]]
+name = "wgsl_to_wgpu"
+version = "0.10.0"
+dependencies = [
+ "case",
+ "naga",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.76",
+ "thiserror",
+ "wgpu-types",
 ]
 
 [[package]]

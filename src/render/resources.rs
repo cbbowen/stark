@@ -1,13 +1,13 @@
-use crate::geom::Mat4x4fUniform;
 
+use crate::shaders;
+use super::Shader;
 use super::pipeline_builder::*;
 use std::rc::Rc;
 
 /// Resources that only need to be loaded once for a given device.
 #[derive(Debug, Clone)]
 pub struct Resources {
-	// Pipeline factories.
-	pub render_drawing_pipeline_factory: Rc<PipelineFactory>,
+	pub canvas: Rc<Shader>,
 	pub drawing_action_pipeline_factory: Rc<PipelineFactory>,
 }
 
@@ -37,32 +37,10 @@ struct DrawingActionUniform {
 impl Resources {
 	pub fn new(device: &wgpu::Device) -> Self {
 		Resources {
-			render_drawing_pipeline_factory: PipelineFactory::new(
-				device,
-				"canvas",
-				include_str!("canvas.wgsl"),
-				[BindGroupLayout::new(
-					device,
-					"texture",
-					[
-						BindGroupLayoutEntry::new(
-							"chart_to_canvas",
-							wgpu::ShaderStages::VERTEX,
-							&UniformBuildBindingType::<Mat4x4fUniform>::new(),
-						),
-						BindGroupLayoutEntry::new(
-							"chart_texture",
-							wgpu::ShaderStages::FRAGMENT,
-							&Texture2f2BuildBindingType::default(),
-						),
-						BindGroupLayoutEntry::new(
-							"chart_sampler",
-							wgpu::ShaderStages::FRAGMENT,
-							&SamplerBuildBindingType::default(),
-						),
-					],
-				)],
-			).into(),
+			canvas: Shader {
+				module: shaders::canvas::create_shader_module(device),
+				layout: shaders::canvas::create_pipeline_layout(device),
+			}.into(),
 
 			drawing_action_pipeline_factory: PipelineFactory::new(
 				device,

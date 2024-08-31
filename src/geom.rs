@@ -1,5 +1,6 @@
-use cgmath::{num_traits::Inv, prelude::*};
+use glam;
 use std::ops::{Mul, Neg};
+pub type Vec2f = glam::Vec2;
 
 use crate::render::UniformBindingType;
 
@@ -7,23 +8,28 @@ impl UniformBindingType for [f32; 2] {
 	fn name() -> &'static str { "vec2<f32>" }
 }
 
-type Vec2<T> = cgmath::Vector2<T>;
-pub type Vec2f = Vec2<f32>;
-pub type Vec2i = Vec2<i32>;
+// type Vec2<T> = cgmath::Vector2<T>;
+// pub type Vec2f = Vec2<f32>;
+// pub type Vec2i = Vec2<i32>;
 
 impl UniformBindingType for Vec2f {
 	fn name() -> &'static str { "vec2<f32>" }
 }
 
-impl UniformBindingType for Vec2i {
-	fn name() -> &'static str { "vec2<i32>" }
-}
+// impl UniformBindingType for Vec2i {
+// 	fn name() -> &'static str { "vec2<i32>" }
+// }
 
 trait Vec2Ext {
 	fn perp(self) -> Self;
 }
 
-impl<T: Neg<Output = T>> Vec2Ext for Vec2<T> {
+// impl<T: Neg<Output = T>> Vec2Ext for Vec2<T> {
+// 	fn perp(self) -> Self {
+// 		Self::new(-self.y, self.x)
+// 	}
+// }
+impl Vec2Ext for Vec2f {
 	fn perp(self) -> Self {
 		Self::new(-self.y, self.x)
 	}
@@ -75,7 +81,7 @@ impl Scale2f {
 	}
 
 	pub fn inverse(self) -> Self {
-		Self::new(self.factor().inv())
+		Self::new(1f32 / self.factor())
 	}
 }
 
@@ -105,13 +111,13 @@ impl Ortho2f {
 	}
 
 	pub fn transform(self, p: Vec2f) -> Vec2f {
-		let Vec2 { x, y } = self.applied_to_unit_x();
+		let Vec2f { x, y } = self.applied_to_unit_x();
 		x * p + y * p.perp()
 	}
 
 	pub fn inverse(self) -> Self {
 		let applied_to_unit_x = self.applied_to_unit_x();
-		Self(Vec2::new(applied_to_unit_x.x, -applied_to_unit_x.y) / applied_to_unit_x.magnitude2())
+		Self(Vec2f::new(applied_to_unit_x.x, -applied_to_unit_x.y) / applied_to_unit_x.length_squared())
 	}
 }
 
@@ -134,16 +140,16 @@ pub struct Trans2f(pub Vec2f);
 
 impl Default for Trans2f {
 	fn default() -> Self {
-		Trans2f(Vec2::zero())
+		Trans2f(Vec2f::default())
 	}
 }
 
 impl Trans2f {
 	pub fn new(x: f32, y: f32) -> Self {
-		Self(Vec2::new(x, y))
+		Self(Vec2f::new(x, y))
 	}
 
-	pub fn offset(self) -> Vec2<f32> {
+	pub fn offset(self) -> Vec2f {
 		self.0
 	}
 
@@ -226,45 +232,45 @@ impl Mul for Similar2f {
 	}
 }
 
-pub struct AABox<T: Bounded + Copy + Ord> {
-	min: Vec2<T>,
-	max: Vec2<T>,
-}
+// pub struct AABox<T: Bounded + Copy + Ord> {
+// 	min: Vec2<T>,
+// 	max: Vec2<T>,
+// }
 
-impl<T: Bounded + Copy + Ord> AABox<T> {
-	pub fn new(min: Vec2<T>, max: Vec2<T>) -> Self {
-		Self { min, max }
-	}
+// impl<T: Bounded + Copy + Ord> AABox<T> {
+// 	pub fn new(min: Vec2<T>, max: Vec2<T>) -> Self {
+// 		Self { min, max }
+// 	}
 
-	pub fn empty() -> Self {
-		Self::new(Vec2::max_value(), Vec2::min_value())
-	}
+// 	pub fn empty() -> Self {
+// 		Self::new(Vec2::max_value(), Vec2::min_value())
+// 	}
 
-	pub fn is_empty(&self) -> bool {
-		self.min.x > self.max.x && self.min.y > self.max.y
-	}
+// 	pub fn is_empty(&self) -> bool {
+// 		self.min.x > self.max.x && self.min.y > self.max.y
+// 	}
 
-	pub fn expanded_to_contain(self, point: Vec2<T>) -> Self {
-		Self::new(self.min.zip(point, &T::min), self.max.zip(point, &T::max))
-	}
+// 	pub fn expanded_to_contain(self, point: Vec2<T>) -> Self {
+// 		Self::new(self.min.zip(point, &T::min), self.max.zip(point, &T::max))
+// 	}
 
-	pub fn containing(points: impl Iterator<Item = Vec2<T>>) -> Self {
-		points.fold(Self::empty(), |b, p| b.expanded_to_contain(p))
-	}
+// 	pub fn containing(points: impl Iterator<Item = Vec2<T>>) -> Self {
+// 		points.fold(Self::empty(), |b, p| b.expanded_to_contain(p))
+// 	}
 
-	pub fn contains(&self, point: Vec2<T>) -> bool {
-		point.x < self.max.x
-			&& point.y < self.max.y
-			&& !(point.x < self.min.x)
-			&& !(point.y < self.min.y)
-	}
+// 	pub fn contains(&self, point: Vec2<T>) -> bool {
+// 		point.x < self.max.x
+// 			&& point.y < self.max.y
+// 			&& !(point.x < self.min.x)
+// 			&& !(point.y < self.min.y)
+// 	}
 
-	pub fn corners(&self) -> [Vec2<T>; 4] {
-		[
-			self.min,
-			Vec2::new(self.min[0], self.max[1]),
-			self.max,
-			Vec2::new(self.max[0], self.min[1]),
-		]
-	}
-}
+// 	pub fn corners(&self) -> [Vec2<T>; 4] {
+// 		[
+// 			self.min,
+// 			Vec2::new(self.min[0], self.max[1]),
+// 			self.max,
+// 			Vec2::new(self.max[0], self.min[1]),
+// 		]
+// 	}
+// }

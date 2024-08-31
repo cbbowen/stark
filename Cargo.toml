@@ -6,8 +6,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 async-once-cell = "0.5"
-bytemuck = { version = "1.15", features = ["derive"] }
-cgmath = "0.18"
 futures = "0.3"
 itertools = "0.13"
 leptos = "0.6"
@@ -23,6 +21,9 @@ tracing = { version = "0.1", features = ["release_max_level_warn"] }
 tracing-log = { version = "0.2", optional = true }
 tracing-subscriber = "0.3"
 wgpu = { version = "22.1" }
+bytemuck = { version = "1.16", features = ["derive"] }
+encase = { version = "0.9.0", features = ["glam"] }
+glam = { version = "0.28.0", features = ["bytemuck"] }
 
 [dev-dependencies]
 wasm-bindgen = "0.2"
@@ -35,6 +36,10 @@ web-sys = { version = "0.3", features = [
 pollster = "0.3"
 png = "0.17"
 image = { version = "0.25", default_features = false, features = ["png"] }
+
+[build-dependencies]
+# wgsl_to_wgpu = "0.10"
+wgsl_to_wgpu = { path = "deps/wgsl_to_wgpu/wgsl_to_wgpu" }
 
 # I'm not sure what the best way to configure dependencies is. In theory,
 # targeting WASM and running in the client are orthogonal. For now, we put

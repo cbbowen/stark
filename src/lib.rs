@@ -5,6 +5,7 @@ mod pages;
 mod render;
 mod engine;
 mod geom;
+pub mod shaders;
 
 mod wgpu_context;
 pub use wgpu_context::*;

@@ -18,12 +18,12 @@ use wgpu::util::DeviceExt;
 fn canvas_render_pipeline(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
-	pipeline_factory: &render::PipelineFactory,
+	shader: &render::Shader,
 ) -> wgpu::RenderPipeline {
-	let module = pipeline_factory.module();
+	let module = &shader.module;
 	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 		label: Some("Render Pipeline"),
-		layout: Some(pipeline_factory.layout()),
+		layout: Some(&shader.layout),
 		vertex: wgpu::VertexState {
 			module,
 			entry_point: "vs_main",
@@ -110,24 +110,21 @@ fn create_drawing_action_bind_group(
 
 fn create_render_drawing_bind_group(
 	device: &wgpu::Device,
-	pipeline_factory: &render::PipelineFactory,
 	texture_view: &wgpu::TextureView,
 	sampler: &wgpu::Sampler,
-) -> wgpu::BindGroup {
+) -> shaders::canvas::bind_groups::BindGroup0 {
+	use shaders::canvas::bind_groups::*;
 	let chart_to_canvas_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("chart_to_canvas"),
 		contents: bytemuck::cast_slice(&[geom::Similar2f::default().to_mat4x4_uniform()]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
-	pipeline_factory.bind_group_layouts()[0].create_bind_group(device, &[
-			// chart_to_canvas
-			chart_to_canvas_buffer.as_entire_binding(),
-			// chart_texture
-			wgpu::BindingResource::TextureView(texture_view),
-			// chart_sampler
-			wgpu::BindingResource::Sampler(sampler),
-		],
-	)
+	BindGroup0::from_bindings(device,
+	BindGroupLayout0 {
+		chart_to_canvas: chart_to_canvas_buffer.as_entire_buffer_binding(),
+		chart_texture: texture_view,
+		chart_sampler: sampler
+	})
 }
 
 fn create_drawing_pipeline(
@@ -189,11 +186,11 @@ pub fn Canvas() -> impl IntoView {
 	let drawing_texture_view = create_drawing_texture_view(context.device(), texture_format);
 	let drawing_sampler = create_drawing_sampler(context.device());
 	let render_drawing_bind_group =
-		create_render_drawing_bind_group(context.device(), &resources.render_drawing_pipeline_factory, &drawing_texture_view, &drawing_sampler);
+		create_render_drawing_bind_group(context.device(), &drawing_texture_view, &drawing_sampler);
 	let render_pipeline = canvas_render_pipeline(
 		context.device(),
 		texture_format,
-		&resources.render_drawing_pipeline_factory
+		&resources.canvas
 	);
 
 	let redraw_trigger = create_trigger();
@@ -241,7 +238,7 @@ pub fn Canvas() -> impl IntoView {
 						timestamp_writes: None,
 					});
 					render_pass.set_pipeline(&render_pipeline);
-					render_pass.set_bind_group(0, &render_drawing_bind_group, &[]);
+					render_drawing_bind_group.set(&mut render_pass);
 					// TODO: Pass in uniforms for the camera.
 					render_pass.draw(0..4, 0..1);
 				}
