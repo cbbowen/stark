@@ -1,0 +1,8 @@
+trunk-version = "0.20"
+
+[build]
+target = "index.html"
+minify = "on_release"
+
+[serve]
+addresses = ["127.0.0.1"]
