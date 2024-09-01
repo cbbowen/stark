@@ -1,10 +1,10 @@
 pub(crate) mod util;
 
 mod components;
-mod pages;
-mod render;
 mod engine;
 mod geom;
+mod pages;
+mod render;
 pub mod shaders;
 
 mod wgpu_context;
@@ -32,8 +32,9 @@ pub fn App() -> impl IntoView {
 
 		<Router>
 			<Routes>
-				<Route path="/" view=pages::Home/>
-				<Route path="/*" view=pages::NotFound/>
+				// TODO: Figure out best to handle routes. When deployed on Github pages, this will be under /stark, but when testing locally with trunk, it won't.
+				<Route path="/*" view=pages::Home/>
+			// <Route path="/*" view=pages::NotFound/>
 			</Routes>
 		</Router>
 	}
