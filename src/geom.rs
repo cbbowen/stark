@@ -182,10 +182,10 @@ impl Similar2f {
 			translation: Trans2f(offset),
 		} = self;
 		Mat4x4fUniform([
-			[ortho_x.x, -ortho_x.y, 0.0, 0.0],
-			[ortho_x.y, ortho_x.x, 0.0, 0.0],
+			[ortho_x.x, -ortho_x.y, 0.0, offset.x],
+			[ortho_x.y, ortho_x.x, 0.0, offset.y],
 			[0.0, 0.0, 1.0, 0.0],
-			[offset.x, offset.y, 0.0, 1.0],
+			[0.0, 0.0, 0.0, 1.0],
 		])
 	}
 }

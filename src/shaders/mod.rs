@@ -1,5 +1,11 @@
-extern crate wgsl_to_wgpu_macro;
+use wgsl_to_wgpu_macro::shader_module;
 
-wgsl_to_wgpu_macro::shader_module!("src/shaders", "canvas.wgsl");
-wgsl_to_wgpu_macro::shader_module!("src/shaders", "drawing.wgsl");
-wgsl_to_wgpu_macro::shader_module!("src/shaders", "copy_scaled.wgsl");
+shader_module!(pub mod "canvas.wgsl" in "src/shaders");
+shader_module!(pub mod "drawing.wgsl" in "src/shaders");
+shader_module!(pub mod "copy_scaled.wgsl" in "src/shaders");
+
+pub mod chart {
+	super::shader_module!(mod "chart.wgsl" in "src/shaders");
+	pub use chart::bind_groups::BindGroup0 as BindGroup;
+	pub use chart::bind_groups::BindGroupLayout0 as BindGroupLayout;
+}
