@@ -9,12 +9,6 @@ use leptos_use::UseElementSizeReturn;
 use std::rc::Rc;
 use wgpu::util::DeviceExt;
 
-// #[repr(C)]
-// #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-// struct CanvasUniform {
-//     view_proj: [[f32; 4]; 4],
-// }
-
 fn canvas_render_pipeline(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
@@ -55,7 +49,7 @@ fn canvas_render_pipeline(
 	})
 }
 
-fn create_drawing_texture_view(
+fn create_canvas_texture_view(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
 ) -> wgpu::TextureView {
@@ -76,7 +70,7 @@ fn create_drawing_texture_view(
 	texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
-fn create_drawing_sampler(device: &wgpu::Device) -> wgpu::Sampler {
+fn create_canvas_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 	device.create_sampler(&wgpu::SamplerDescriptor {
 		address_mode_u: wgpu::AddressMode::ClampToEdge,
 		address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -106,24 +100,45 @@ fn create_drawing_action_bind_group(
 	(bind_group, buffer)
 }
 
-fn create_render_drawing_bind_group(
+fn create_canvas_bind_groups(
 	device: &wgpu::Device,
 	texture_view: &wgpu::TextureView,
 	sampler: &wgpu::Sampler,
-) -> shaders::canvas::bind_groups::BindGroup0 {
+) -> (
+	shaders::canvas::bind_groups::BindGroup0,
+	shaders::canvas::bind_groups::BindGroup1,
+) {
 	use shaders::canvas::bind_groups::*;
+
 	let chart_to_canvas_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("chart_to_canvas"),
 		contents: bytemuck::cast_slice(&[geom::Similar2f::default().to_mat4x4_uniform()]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
-	BindGroup0::from_bindings(
-		device,
-		BindGroupLayout0 {
-			chart_to_canvas: chart_to_canvas_buffer.as_entire_buffer_binding(),
-			chart_texture: texture_view,
-			chart_sampler: sampler,
-		},
+
+	let canvas_to_view =
+		geom::Similar2f::new(geom::Scale2f::new(2.0), geom::Trans2f::new(-1.0, -1.0));
+	let canvas_to_view_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+		label: Some("canvas_to_view"),
+		contents: bytemuck::cast_slice(&[canvas_to_view.to_mat4x4_uniform()]),
+		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+	});
+
+	(
+		BindGroup0::from_bindings(
+			device,
+			BindGroupLayout0 {
+				chart_to_canvas: chart_to_canvas_buffer.as_entire_buffer_binding(),
+				chart_texture: texture_view,
+				chart_sampler: sampler,
+			},
+		),
+		BindGroup1::from_bindings(
+			device,
+			BindGroupLayout1 {
+				canvas_to_view: canvas_to_view_buffer.as_entire_buffer_binding(),
+			},
+		),
 	)
 }
 
@@ -178,10 +193,10 @@ pub fn Canvas() -> impl IntoView {
 	let drawing_pipeline =
 		create_drawing_pipeline(context.device(), texture_format, &resources.drawing);
 
-	let drawing_texture_view = create_drawing_texture_view(context.device(), texture_format);
-	let drawing_sampler = create_drawing_sampler(context.device());
-	let render_drawing_bind_group =
-		create_render_drawing_bind_group(context.device(), &drawing_texture_view, &drawing_sampler);
+	let canvas_texture_view = create_canvas_texture_view(context.device(), texture_format);
+	let canvas_sampler = create_canvas_sampler(context.device());
+	let (canvas_bind_group0, canvas_bind_group1) =
+		create_canvas_bind_groups(context.device(), &canvas_texture_view, &canvas_sampler);
 	let render_pipeline =
 		canvas_render_pipeline(context.device(), texture_format, &resources.canvas);
 
@@ -191,12 +206,14 @@ pub fn Canvas() -> impl IntoView {
 
 	let render = {
 		let context = context.clone();
-		let render_drawing_bind_group = Rc::new(render_drawing_bind_group);
+		let canvas_bind_group0 = Rc::new(canvas_bind_group0);
+		let canvas_bind_group1 = Rc::new(canvas_bind_group1);
 		let render_pipeline = Rc::new(render_pipeline);
 		create_derived(move || {
 			let context = context.clone();
 			redraw_trigger.track();
-			let render_drawing_bind_group = render_drawing_bind_group.clone();
+			let canvas_bind_group0 = canvas_bind_group0.clone();
+			let canvas_bind_group1 = canvas_bind_group1.clone();
 			let render_pipeline = render_pipeline.clone();
 			leptos::Callback::new(move |view: wgpu::TextureView| {
 				let mut encoder =
@@ -228,7 +245,8 @@ pub fn Canvas() -> impl IntoView {
 						..Default::default()
 					});
 					render_pass.set_pipeline(&render_pipeline);
-					render_drawing_bind_group.set(&mut render_pass);
+					canvas_bind_group0.set(&mut render_pass);
+					canvas_bind_group1.set(&mut render_pass);
 					// TODO: Pass in uniforms for the camera.
 					render_pass.draw(0..4, 0..1);
 				}
@@ -252,7 +270,7 @@ pub fn Canvas() -> impl IntoView {
 
 	let draw = {
 		let context = context.clone();
-		let drawing_texture_view = Rc::new(drawing_texture_view);
+		let canvas_texture_view = Rc::new(canvas_texture_view);
 		let drawing_action_bind_group = Rc::new(drawing_action_bind_group);
 		let drawing_action_buffer = Rc::new(drawing_action_buffer);
 		move |x: f64, y: f64| {
@@ -278,7 +296,7 @@ pub fn Canvas() -> impl IntoView {
 					color_attachments: &[
 						// This is what @location(0) in the fragment shader targets
 						Some(wgpu::RenderPassColorAttachment {
-							view: &drawing_texture_view,
+							view: &canvas_texture_view,
 							resolve_target: None,
 							ops: wgpu::Operations {
 								load: wgpu::LoadOp::Load,
