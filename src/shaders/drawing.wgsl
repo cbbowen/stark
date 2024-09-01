@@ -28,6 +28,6 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-	let alpha = 0.025 * max(0.0, 1.0 - dot(in.tex_coords, in.tex_coords));
-	return vec4<f32>(1.0, 1.0, 1.0, alpha);
+	let alpha = 0.05 * max(0.0, 1.0 - dot(in.tex_coords, in.tex_coords));
+	return vec4<f32>(0.75, vec2(0.1, 0.35) * sin(in.tex_coords / 1.57079632679), alpha);
 }

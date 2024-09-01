@@ -170,7 +170,7 @@ impl ChartPool {
 					label: None,
 					entries: &[wgpu::BindGroupLayoutEntry {
 						binding: 0,
-						visibility: wgpu::ShaderStages::FRAGMENT,
+						visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
 						// TODO: We could do this with a single bind group by using an array of
 						// textures.
 						count: None,
