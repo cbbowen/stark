@@ -8,30 +8,7 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Resources {
 	pub canvas: Rc<Shader>,
-	pub drawing_action_pipeline_factory: Rc<PipelineFactory>,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct DrawingActionUniform {
-	position: [f32; 2],
-}
-
-impl UniformBindingType for DrawingActionUniform {
-	fn name() -> &'static str {
-		"DrawingActionUniform"
-	}
-
-	fn type_definitions() -> TypeDefinitions {
-		[r#"
-struct DrawingActionUniform {
-	position: vec2<f32>,
-};
-		 "#
-		.to_string()]
-		.into_iter()
-		.collect()
-	}
+	pub drawing: Rc<Shader>,
 }
 
 impl Resources {
@@ -42,21 +19,10 @@ impl Resources {
 				layout: shaders::canvas::create_pipeline_layout(device),
 			}.into(),
 
-			drawing_action_pipeline_factory: PipelineFactory::new(
-				device,
-				"drawing",
-				include_str!("drawing.wgsl"),
-				[BindGroupLayout::new(
-					device,
-					"texture",
-					[BindGroupLayoutEntry::new(
-						"action",
-						wgpu::ShaderStages::VERTEX,
-						&UniformBuildBindingType::<DrawingActionUniform>::new(),
-					)],
-				)],
-			)
-			.into(),
+			drawing: Shader {
+				module: shaders::drawing::create_shader_module(device),
+				layout: shaders::drawing::create_pipeline_layout(device),
+			}.into(),
 		}
 	}
 }

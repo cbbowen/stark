@@ -20,19 +20,20 @@ fn canvas_render_pipeline(
 	texture_format: wgpu::TextureFormat,
 	shader: &render::Shader,
 ) -> wgpu::RenderPipeline {
+	use shaders::canvas::*;
 	let module = &shader.module;
 	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 		label: Some("Render Pipeline"),
 		layout: Some(&shader.layout),
 		vertex: wgpu::VertexState {
 			module,
-			entry_point: shaders::canvas::ENTRY_VS_MAIN,
+			entry_point: ENTRY_VS_MAIN,
 			compilation_options: Default::default(),
 			buffers: &[],
 		},
-		fragment: Some(shaders::canvas::fragment_state(
+		fragment: Some(fragment_state(
 			module,
-			&shaders::canvas::fs_main_entry([Some(wgpu::ColorTargetState {
+			&fs_main_entry([Some(wgpu::ColorTargetState {
 				format: texture_format,
 				blend: Some(wgpu::BlendState::REPLACE),
 				write_mask: wgpu::ColorWrites::ALL,
@@ -87,23 +88,21 @@ fn create_drawing_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 	})
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct DrawingActionUniform {
-	position: [f32; 2],
-}
-
 fn create_drawing_action_bind_group(
 	device: &wgpu::Device,
-	pipeline_factory: &render::PipelineFactory,
-) -> (wgpu::BindGroup, wgpu::Buffer) {
+) -> (shaders::drawing::bind_groups::BindGroup0, wgpu::Buffer) {
+	use shaders::drawing::bind_groups::*;
 	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("drawing_action"),
-		contents: bytemuck::cast_slice(&[DrawingActionUniform::zeroed()]),
+		contents: bytemuck::cast_slice(&[shaders::drawing::DrawingAction::zeroed()]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
-	let bind_group = pipeline_factory.bind_group_layouts()[0]
-		.create_bind_group(device, &[buffer.as_entire_binding()]);
+	let bind_group = BindGroup0::from_bindings(
+		device,
+		BindGroupLayout0 {
+			action: buffer.as_entire_buffer_binding(),
+		},
+	);
 	(bind_group, buffer)
 }
 
@@ -131,28 +130,26 @@ fn create_render_drawing_bind_group(
 fn create_drawing_pipeline(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
-	pipeline_factory: &render::PipelineFactory,
+	shader: &render::Shader,
 ) -> wgpu::RenderPipeline {
-	let module = pipeline_factory.module();
+	use shaders::drawing::*;
 	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 		label: Some("Render Pipeline"),
-		layout: Some(pipeline_factory.layout()),
+		layout: Some(&shader.layout),
 		vertex: wgpu::VertexState {
-			module,
+			module: &shader.module,
 			entry_point: "vs_main",
 			compilation_options: Default::default(),
 			buffers: &[],
 		},
-		fragment: Some(wgpu::FragmentState {
-			module,
-			entry_point: "fs_main",
-			compilation_options: Default::default(),
-			targets: &[Some(wgpu::ColorTargetState {
+		fragment: Some(fragment_state(
+			&shader.module,
+			&fs_main_entry([Some(wgpu::ColorTargetState {
 				format: texture_format,
 				blend: Some(wgpu::BlendState::ALPHA_BLENDING),
 				write_mask: wgpu::ColorWrites::ALL,
-			})],
-		}),
+			})]),
+		)),
 		primitive: wgpu::PrimitiveState {
 			topology: wgpu::PrimitiveTopology::TriangleStrip,
 			strip_index_format: None,
@@ -176,15 +173,10 @@ pub fn Canvas() -> impl IntoView {
 
 	let texture_format = wgpu::TextureFormat::Rgba16Float;
 
-	let (drawing_action_bind_group, drawing_action_buffer) = create_drawing_action_bind_group(
-		context.device(),
-		&resources.drawing_action_pipeline_factory,
-	);
-	let drawing_pipeline = create_drawing_pipeline(
-		context.device(),
-		texture_format,
-		&resources.drawing_action_pipeline_factory,
-	);
+	let (drawing_action_bind_group, drawing_action_buffer) =
+		create_drawing_action_bind_group(context.device());
+	let drawing_pipeline =
+		create_drawing_pipeline(context.device(), texture_format, &resources.drawing);
 
 	let drawing_texture_view = create_drawing_texture_view(context.device(), texture_format);
 	let drawing_sampler = create_drawing_sampler(context.device());
@@ -233,9 +225,7 @@ pub fn Canvas() -> impl IntoView {
 								},
 							}),
 						],
-						depth_stencil_attachment: None,
-						occlusion_query_set: None,
-						timestamp_writes: None,
+						..Default::default()
 					});
 					render_pass.set_pipeline(&render_pipeline);
 					render_drawing_bind_group.set(&mut render_pass);
@@ -277,8 +267,8 @@ pub fn Canvas() -> impl IntoView {
 			context.queue().write_buffer(
 				&drawing_action_buffer,
 				0,
-				bytemuck::cast_slice(&[DrawingActionUniform {
-					position: [x as f32, y as f32],
+				bytemuck::cast_slice(&[shaders::drawing::DrawingAction {
+					position: glam::Vec2::new(x as f32, y as f32),
 				}]),
 			);
 
@@ -296,12 +286,10 @@ pub fn Canvas() -> impl IntoView {
 							},
 						}),
 					],
-					depth_stencil_attachment: None,
-					occlusion_query_set: None,
-					timestamp_writes: None,
+					..Default::default()
 				});
 				render_pass.set_pipeline(&drawing_pipeline);
-				render_pass.set_bind_group(0, &drawing_action_bind_group, &[]);
+				drawing_action_bind_group.set(&mut render_pass);
 				// TODO: Pass in uniforms for the position and other parameters.
 				// https://sotrh.github.io/learn-wgpu/beginner/tutorial6-uniforms/#uniform-buffers-and-bind-groups
 				render_pass.draw(0..4, 0..1);

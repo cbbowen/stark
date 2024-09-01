@@ -1,8 +1,8 @@
-// struct DrawingActionUniform {
-//    position: vec2<f32>,
-// };
-// @group(0) @binding(0)
-// var<uniform> action: DrawingActionUniform;
+struct DrawingAction {
+   position: vec2<f32>,
+};
+@group(0) @binding(0)
+var<uniform> action: DrawingAction;
 
 struct VertexInput {
 	@builtin(vertex_index) vertex_index: u32,

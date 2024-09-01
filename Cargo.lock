@@ -560,7 +560,7 @@ checksum = "0265fa0e7bcdb058128cdf7597cdacea42e33911713663a04d971a39cad16afa"
 dependencies = [
  "const_panic",
  "encase_derive",
- "glam 0.28.0",
+ "glam",
  "thiserror",
 ]
 
@@ -769,12 +769,6 @@ name = "glam"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "779ae4bf7e8421cf91c0b3b64e7e8b40b862fba4d393f59150042de7c4965a94"
-
-[[package]]
-name = "glam"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c28091a37a5d09b555cb6628fd954da299b536433834f5b8e59eba78e0cbbf8a"
 dependencies = [
  "bytemuck",
 ]
@@ -2062,7 +2056,7 @@ dependencies = [
  "console_error_panic_hook",
  "encase",
  "futures",
- "glam 0.29.0",
+ "glam",
  "image",
  "itertools 0.13.0",
  "leptos",
