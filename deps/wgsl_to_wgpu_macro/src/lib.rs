@@ -1,5 +1,6 @@
 extern crate proc_macro;
 use wgsl_to_wgpu::*;
+use quote::quote;
 
 struct ShaderModuleInput {
     // We could avoid needing the current_path if we had either:
@@ -34,7 +35,16 @@ pub fn shader_module(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let wgsl_path: std::path::PathBuf = input.wgsl_path.value().into();
 
     let wgsl_source = std::fs::read_to_string(current_path.join(&wgsl_path)).unwrap();
-    create_shader_module_tokens(&wgsl_source, Some(&wgsl_path.to_string_lossy()), options)
-        .unwrap()
-        .into()
+    let mut rs_source = create_shader_module_tokens(&wgsl_source, Some(&wgsl_path.to_string_lossy()), options)
+        .unwrap();
+	
+	 for name in wgsl_path.with_extension("").components().rev() {
+		let name = syn::Ident::new(&name.as_os_str().to_string_lossy(), input.wgsl_path.span());
+		rs_source = quote! {
+			pub mod #name {
+				#rs_source
+			}
+		 };
+	 }
+	 rs_source.into()
 }
