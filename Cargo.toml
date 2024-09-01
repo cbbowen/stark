@@ -11,7 +11,7 @@ itertools = "0.13"
 leptos = "0.6"
 leptos_meta = "0.6"
 leptos_router = "0.6"
-leptos-use = "0.12"
+leptos-use = "0.13"
 # tap = "1.0"
 thiserror = "1.0"
 # This is included only so we can set the "release_max_level_warn" feature.
@@ -20,10 +20,10 @@ static_assertions = "1.1.0"
 tracing = { version = "0.1", features = ["release_max_level_warn"] }
 tracing-log = { version = "0.2", optional = true }
 tracing-subscriber = "0.3"
-wgpu = { version = "22.1" }
-bytemuck = { version = "1.16", features = ["derive"] }
+wgpu = { version = "22.1.*" }
+bytemuck = { version = "1.17", features = ["derive"] }
 encase = { version = "0.9.0", features = ["glam"] }
-glam = { version = "0.28.0", features = ["bytemuck"] }
+glam = { version = "0.29", features = ["bytemuck"] }
 wgsl_to_wgpu_macro = { path = "deps/wgsl_to_wgpu_macro" }
 
 [dev-dependencies]
