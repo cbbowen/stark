@@ -1,3 +1,4 @@
+use shaders::canvas::{bind_groups, fs_main_entry, ENTRY_VS_MAIN};
 use wgpu::util::DeviceExt;
 use wgpu::Extent3d;
 
@@ -9,7 +10,7 @@ use std::rc::Rc;
 pub struct WgpuTestContext {
 	context: Rc<WgpuContext>,
 
-	copy_scaled_pipeline_factory: render::PipelineFactory,
+	copy_scaled: render::Shader,
 }
 
 impl Deref for WgpuTestContext {
@@ -51,34 +52,15 @@ impl WgpuTestContext {
 		let context = pollster::block_on(WgpuContext::new())?;
 		let device = context.device();
 
-		let bind_group_layout = render::BindGroupLayout::new(
-			device,
-			"copy_scaled",
-			[
-				render::BindGroupLayoutEntry::new(
-					"source_texture",
-					wgpu::ShaderStages::FRAGMENT,
-					&render::Texture2f2BuildBindingType::default(),
-				),
-				render::BindGroupLayoutEntry::new(
-					"source_sampler",
-					wgpu::ShaderStages::FRAGMENT,
-					&render::SamplerBuildBindingType::default(),
-				),
-			],
-		);
-
-		let copy_scaled_pipeline_factory = render::PipelineFactory::new(
-			device,
-			"copy_scaled",
-			include_str!("copy_scaled.wgsl"),
-			[bind_group_layout],
-		);
-
 		let context = Rc::new(context);
 		Ok(Self {
 			context,
-			copy_scaled_pipeline_factory,
+
+			copy_scaled: render::Shader {
+				module: shaders::copy_scaled::create_shader_module(device),
+				layout: shaders::copy_scaled::create_pipeline_layout(device),
+			}
+			.into(),
 		})
 	}
 
@@ -128,25 +110,23 @@ impl WgpuTestContext {
 			..Default::default()
 		});
 
+		use shaders::copy_scaled::*;
 		let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: None,
-			layout: Some(self.copy_scaled_pipeline_factory.layout()),
+			layout: Some(&self.copy_scaled.layout),
 			vertex: wgpu::VertexState {
-				module: self.copy_scaled_pipeline_factory.module(),
-				entry_point: "vs_main",
+				module: &self.copy_scaled.module,
+				entry_point: ENTRY_VS_MAIN,
 				compilation_options: Default::default(),
 				buffers: &[],
 			},
-			fragment: Some(wgpu::FragmentState {
-				module: self.copy_scaled_pipeline_factory.module(),
-				entry_point: "fs_main",
-				compilation_options: Default::default(),
-				targets: &[Some(wgpu::ColorTargetState {
+			fragment: Some(fragment_state(fs_main_entry([Some(
+				wgpu::ColorTargetState {
 					format: destination.format(),
 					blend: Some(wgpu::BlendState::REPLACE),
 					write_mask: wgpu::ColorWrites::ALL,
-				})],
-			}),
+				},
+			)]))),
 			primitive: wgpu::PrimitiveState {
 				topology: wgpu::PrimitiveTopology::TriangleStrip,
 				strip_index_format: None,
@@ -161,12 +141,12 @@ impl WgpuTestContext {
 			multiview: None,
 			cache: None,
 		});
-		let bind_group = self.copy_scaled_pipeline_factory.bind_group_layouts()[0].create_bind_group(
+		let bind_group = bind_groups::BindGroup0::from_bindings(
 			device,
-			&[
-				wgpu::BindingResource::TextureView(&source_view),
-				wgpu::BindingResource::Sampler(&sampler),
-			],
+			bind_groups::BindGroupLayout0 {
+				source_texture: &source_view,
+				source_sampler: &sampler,
+			},
 		);
 
 		let mut command_encoder = device.create_command_encoder(&Default::default());

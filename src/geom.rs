@@ -2,20 +2,6 @@ use glam;
 use std::ops::{Mul, Neg};
 pub type Vec2f = glam::Vec2;
 
-use crate::render::UniformBindingType;
-
-impl UniformBindingType for [f32; 2] {
-	fn name() -> &'static str { "vec2<f32>" }
-}
-
-// type Vec2<T> = cgmath::Vector2<T>;
-// pub type Vec2f = Vec2<f32>;
-// pub type Vec2i = Vec2<i32>;
-
-impl UniformBindingType for Vec2f {
-	fn name() -> &'static str { "vec2<f32>" }
-}
-
 // impl UniformBindingType for Vec2i {
 // 	fn name() -> &'static str { "vec2<i32>" }
 // }
@@ -35,27 +21,9 @@ impl Vec2Ext for Vec2f {
 	}
 }
 
-trait ToUniform {
-	type Uniform: UniformBindingType;
-	fn to_uniform(self) -> Self::Uniform;
-} 
-
-impl ToUniform for Vec2f {
-	type Uniform = [f32; 2];
-	fn to_uniform(self) -> Self::Uniform {
-		 [self.x, self.y]
-	}
-}
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Mat4x4fUniform([[f32; 4]; 4]);
-
-impl crate::render::UniformBindingType for Mat4x4fUniform {
-	fn name() -> &'static str {
-		"mat4x4<f32>"
-	}
-}
 
 /// Linear transformation that preserves orientations.
 #[derive(Debug, Copy, Clone, PartialEq)]

@@ -1,7 +1,6 @@
 
 use crate::shaders;
 use super::Shader;
-use super::pipeline_builder::*;
 use std::rc::Rc;
 
 /// Resources that only need to be loaded once for a given device.
