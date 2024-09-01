@@ -26,20 +26,18 @@ fn canvas_render_pipeline(
 		layout: Some(&shader.layout),
 		vertex: wgpu::VertexState {
 			module,
-			entry_point: "vs_main",
+			entry_point: shaders::canvas::ENTRY_VS_MAIN,
 			compilation_options: Default::default(),
 			buffers: &[],
 		},
-		fragment: Some(wgpu::FragmentState {
+		fragment: Some(shaders::canvas::fragment_state(
 			module,
-			entry_point: "fs_main",
-			compilation_options: Default::default(),
-			targets: &[Some(wgpu::ColorTargetState {
+			&shaders::canvas::fs_main_entry([Some(wgpu::ColorTargetState {
 				format: texture_format,
 				blend: Some(wgpu::BlendState::REPLACE),
 				write_mask: wgpu::ColorWrites::ALL,
-			})],
-		}),
+			})]),
+		)),
 		primitive: wgpu::PrimitiveState {
 			topology: wgpu::PrimitiveTopology::TriangleStrip,
 			strip_index_format: None,
@@ -104,7 +102,8 @@ fn create_drawing_action_bind_group(
 		contents: bytemuck::cast_slice(&[DrawingActionUniform::zeroed()]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
-	let bind_group = pipeline_factory.bind_group_layouts()[0].create_bind_group(device, &[buffer.as_entire_binding()]);
+	let bind_group = pipeline_factory.bind_group_layouts()[0]
+		.create_bind_group(device, &[buffer.as_entire_binding()]);
 	(bind_group, buffer)
 }
 
@@ -119,12 +118,14 @@ fn create_render_drawing_bind_group(
 		contents: bytemuck::cast_slice(&[geom::Similar2f::default().to_mat4x4_uniform()]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
-	BindGroup0::from_bindings(device,
-	BindGroupLayout0 {
-		chart_to_canvas: chart_to_canvas_buffer.as_entire_buffer_binding(),
-		chart_texture: texture_view,
-		chart_sampler: sampler
-	})
+	BindGroup0::from_bindings(
+		device,
+		BindGroupLayout0 {
+			chart_to_canvas: chart_to_canvas_buffer.as_entire_buffer_binding(),
+			chart_texture: texture_view,
+			chart_sampler: sampler,
+		},
+	)
 }
 
 fn create_drawing_pipeline(
@@ -175,8 +176,10 @@ pub fn Canvas() -> impl IntoView {
 
 	let texture_format = wgpu::TextureFormat::Rgba16Float;
 
-	let (drawing_action_bind_group, drawing_action_buffer) =
-		create_drawing_action_bind_group(context.device(), &resources.drawing_action_pipeline_factory);
+	let (drawing_action_bind_group, drawing_action_buffer) = create_drawing_action_bind_group(
+		context.device(),
+		&resources.drawing_action_pipeline_factory,
+	);
 	let drawing_pipeline = create_drawing_pipeline(
 		context.device(),
 		texture_format,
@@ -187,11 +190,8 @@ pub fn Canvas() -> impl IntoView {
 	let drawing_sampler = create_drawing_sampler(context.device());
 	let render_drawing_bind_group =
 		create_render_drawing_bind_group(context.device(), &drawing_texture_view, &drawing_sampler);
-	let render_pipeline = canvas_render_pipeline(
-		context.device(),
-		texture_format,
-		&resources.canvas
-	);
+	let render_pipeline =
+		canvas_render_pipeline(context.device(), texture_format, &resources.canvas);
 
 	let redraw_trigger = create_trigger();
 	// let interval = std::time::Duration::from_millis(1000);

@@ -1,3 +1,5 @@
+extern crate wgsl_to_wgpu_macro;
+
 pub mod canvas {
-	include!(concat!(env!("OUT_DIR"), "/generate_wgpu_bindings/src/shaders/canvas.rs"));
+	wgsl_to_wgpu_macro::shader_module!("src/shaders", "canvas.wgsl");
 }

@@ -2089,7 +2089,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "wgpu",
- "wgsl_to_wgpu",
+ "wgsl_to_wgpu_macro",
 ]
 
 [[package]]
@@ -2700,6 +2700,16 @@ dependencies = [
  "syn 2.0.76",
  "thiserror",
  "wgpu-types",
+]
+
+[[package]]
+name = "wgsl_to_wgpu_macro"
+version = "0.10.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.76",
+ "wgsl_to_wgpu",
 ]
 
 [[package]]
