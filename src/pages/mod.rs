@@ -35,8 +35,13 @@ pub fn Home() -> impl IntoView {
 
 #[component]
 pub fn NotFound() -> impl IntoView {
+	let path = use_location().pathname.get();
+
 	view! {
 		<Title text="Not found"/>
-		<div class="NotFound">"Not found"</div>
+		<div class="NotFound">
+			<div>{ format!("Not found: {path}") }</div>
+			<A href="/">Return home</A>
+		</div>
 	}
 }

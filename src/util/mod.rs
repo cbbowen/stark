@@ -17,6 +17,7 @@ pub use result_ext::*;
 
 mod once;
 pub use once::*;
+use wasm_bindgen::JsCast;
 
 /// It is useful to think of signals as having two channels:
 ///
@@ -94,6 +95,29 @@ pub fn set_interval_and_clean_up(
 	Ok(on_cleanup(move || handle.clear()))
 }
 
-pub fn nonzero_size_of<T>() -> Option<std::num::NonZero<u64>> {
-	std::num::NonZero::new(std::mem::size_of::<T>() as u64)
+pub trait PointerCapture {
+	fn set_pointer_capture(&self) -> bool;
+	fn release_pointer_capture(&self) -> bool;
+}
+
+impl PointerCapture for leptos::ev::PointerEvent {
+	fn set_pointer_capture(&self) -> bool {
+		self
+			.current_target()
+			.and_then(|target| target.dyn_into::<web_sys::Element>().ok_or_log())
+			.and_then(|target| target.set_pointer_capture(self.pointer_id()).ok_or_log())
+			.is_some()
+	}
+
+	fn release_pointer_capture(&self) -> bool {
+		self
+			.current_target()
+			.and_then(|target| target.dyn_into::<web_sys::Element>().ok_or_log())
+			.and_then(|target| {
+				target
+					.release_pointer_capture(self.pointer_id())
+					.ok_or_log()
+			})
+			.is_some()
+	}
 }

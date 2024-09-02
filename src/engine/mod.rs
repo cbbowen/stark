@@ -7,7 +7,8 @@
 use std::num::NonZeroU32;
 use std::{cell::RefCell, rc::Rc};
 
-use wgpu::Extent3d;
+use wgpu::util::DeviceExt;
+use wgpu::{BufferAddress, Extent3d};
 
 use crate::WgpuContext;
 
@@ -91,55 +92,75 @@ impl ChartInstanceDataDescriptor {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ChartDescriptor {
-	texture: ChartTextureDescriptor,
-	instance_data: ChartInstanceDataDescriptor,
+pub struct TypedChartDescriptor<Data> {
+	pub texture: ChartTextureDescriptor,
+	pub default_data: Data,
+}
+
+trait ChartDescriptor {
+	fn to_texture_descriptor(&self, block_size: u32) -> wgpu::TextureDescriptor<'_>;
+	fn create_instance_data_buffer(&self, device: &wgpu::Device, block_size: u32) -> wgpu::Buffer;
+	fn instance_data_stride(&self) -> wgpu::BufferAddress;
+}
+
+impl<Data: encase::ShaderSize + encase::internal::WriteInto> ChartDescriptor
+	for TypedChartDescriptor<Data>
+{
+	fn to_texture_descriptor(&self, block_size: u32) -> wgpu::TextureDescriptor<'_> {
+		self.texture.to_texture_descriptor(block_size)
+	}
+
+	fn create_instance_data_buffer(&self, device: &wgpu::Device, block_size: u32) -> wgpu::Buffer {
+		let mut datum = encase::UniformBuffer::new(Vec::<u8>::new());
+		datum.write(&self.default_data).unwrap();
+		let data = datum.into_inner().repeat(block_size as usize);
+
+		device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+			label: None,
+			contents: &data,
+			usage: wgpu::BufferUsages::STORAGE
+				| wgpu::BufferUsages::COPY_DST
+				| wgpu::BufferUsages::COPY_SRC,
+		})
+	}
+
+	fn instance_data_stride(&self) -> wgpu::BufferAddress {
+		 Data::min_size().get()
+	}
 }
 
 struct ChartPoolBlock {
 	texture: wgpu::Texture,
 	texture_view: wgpu::TextureView,
-	instance_data_buffer: wgpu::Buffer,
+	instance_data_buffer: Rc<wgpu::Buffer>,
 	bind_group: Rc<crate::shaders::atlas::bind_groups::BindGroup1>,
 }
 
 impl ChartPoolBlock {
 	pub fn new(
 		context: &WgpuContext,
-		descriptor: &ChartDescriptor,
+		descriptor: &dyn ChartDescriptor,
 		// bind_group_layout: &wgpu::BindGroupLayout,
 		block_size: NonZeroU32,
 	) -> Self {
 		let device = context.device();
-		let texture = device
-			.create_texture(&descriptor.texture.to_texture_descriptor(block_size.get()));
+		let texture = device.create_texture(&descriptor.to_texture_descriptor(block_size.get()));
 
 		let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
 			dimension: Some(wgpu::TextureViewDimension::D2Array),
 			..Default::default()
 		});
-		let instance_data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-			label: None,
-			size: block_size.get() as wgpu::BufferAddress * descriptor.instance_data.array_stride,
-			usage: wgpu::BufferUsages::VERTEX
-				| wgpu::BufferUsages::COPY_DST
-				| wgpu::BufferUsages::COPY_SRC,
-			mapped_at_creation: false,
-		});
-		// let bind_group = device
-		// 	.create_bind_group(&wgpu::BindGroupDescriptor {
-		// 		label: None,
-		// 		layout: bind_group_layout,
-		// 		entries: &[wgpu::BindGroupEntry {
-		// 			binding: 0,
-		// 			// TODO: We could do this with a single bind group by using a `TextureViewArray`.
-		// 			resource: wgpu::BindingResource::TextureView(&texture_view),
-		// 		}],
-		// 	});
+		let instance_data_buffer = descriptor.create_instance_data_buffer(device, block_size.get());
 		use crate::shaders::atlas::bind_groups::*;
-		let bind_group = BindGroup1::from_bindings(device, BindGroupLayout1 {
-			chart_texture: &texture_view,
-		});
+		let bind_group = BindGroup1::from_bindings(
+			device,
+			BindGroupLayout1 {
+				chart_texture: &texture_view,
+				chart_data: instance_data_buffer.as_entire_buffer_binding(),
+			},
+		);
+
+		let instance_data_buffer = Rc::new(instance_data_buffer);
 		let bind_group = Rc::new(bind_group);
 		Self {
 			texture,
@@ -156,40 +177,29 @@ struct ChartPoolIndex {
 	layer_index: u32,
 }
 
+impl ChartPoolIndex {
+	pub fn new(block_index: usize, layer_index: u32) -> Self {
+		Self {
+			block_index,
+			layer_index,
+		}
+	}
+}
+
 pub struct ChartPool {
 	context: Rc<WgpuContext>,
-	descriptor: ChartDescriptor,
+	descriptor: Box<dyn ChartDescriptor>,
 	blocks: RefCell<Vec<ChartPoolBlock>>,
 	free_list: RefCell<Vec<ChartPoolIndex>>,
-	// bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl ChartPool {
-	pub fn new(context: Rc<WgpuContext>, descriptor: ChartDescriptor) -> Self {
-		// let bind_group_layout =
-		// 	context
-		// 		.device()
-		// 		.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-		// 			label: None,
-		// 			entries: &[wgpu::BindGroupLayoutEntry {
-		// 				binding: 0,
-		// 				visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-		// 				// TODO: We could do this with a single bind group by using an array of
-		// 				// textures.
-		// 				count: None,
-		// 				ty: wgpu::BindingType::Texture {
-		// 					sample_type: wgpu::TextureSampleType::Float { filterable: true },
-		// 					view_dimension: wgpu::TextureViewDimension::D2Array,
-		// 					multisampled: false,
-		// 				},
-		// 			}],
-		// 		});
+	pub fn new(context: Rc<WgpuContext>, descriptor: Box<dyn ChartDescriptor>) -> Self {
 		Self {
 			context,
 			descriptor,
 			blocks: Default::default(),
 			free_list: Default::default(),
-			// bind_group_layout,
 		}
 	}
 
@@ -207,7 +217,7 @@ impl ChartPool {
 		let block_size = NonZeroU32::new(block_size).unwrap();
 		let block = ChartPoolBlock::new(
 			&self.context,
-			&self.descriptor,
+			self.descriptor.as_ref(),
 			// &self.bind_group_layout,
 			block_size,
 		);
@@ -236,13 +246,18 @@ impl ChartPool {
 		self.free_list.borrow_mut().push(index)
 	}
 
-	pub fn bind_group(&self, block_index: usize) -> Rc<crate::shaders::atlas::bind_groups::BindGroup1> {
+	pub fn bind_group(
+		&self,
+		block_index: usize,
+	) -> Rc<crate::shaders::atlas::bind_groups::BindGroup1> {
 		self.blocks.borrow()[block_index].bind_group.clone()
 	}
 
-	// pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-	// 	&self.bind_group_layout
-	// }
+	pub fn instance_data_buffer(&self, block_index: usize) -> Rc<wgpu::Buffer> {
+		self.blocks.borrow()[block_index]
+			.instance_data_buffer
+			.clone()
+	}
 }
 
 pub struct Chart {
@@ -256,8 +271,65 @@ impl Drop for Chart {
 	}
 }
 
+impl Chart {
+	pub fn instance_data_buffer(&self) -> (Rc<wgpu::Buffer>, BufferAddress) {
+		let buffer = self.pool.instance_data_buffer(self.pool_index.block_index);
+		let stride = self.pool.descriptor.instance_data_stride();
+		let offset = stride * self.pool_index.layer_index as u64;
+		(buffer, offset)
+	}
+
+	pub fn fill_texture(&self, pixel_data: &[u8]) {
+		let pool = &self.pool;
+		let blocks = pool.blocks.borrow();
+		let block = blocks.get(self.pool_index.block_index).unwrap();
+		pool.context.queue().fill_texture_layer(
+			&block.texture,
+			pixel_data,
+			self.pool_index.layer_index,
+		);
+	}
+}
+
+trait QueueExt {
+	fn fill_texture_layer(&self, texture: &wgpu::Texture, pixel_data: &[u8], layer_index: u32);
+	fn fill_texture(&self, texture: &wgpu::Texture, pixel_data: &[u8]) {
+		self.fill_texture_layer(texture, pixel_data, 0)
+	}
+}
+
+impl QueueExt for wgpu::Queue {
+	fn fill_texture_layer(&self, texture: &wgpu::Texture, pixel_data: &[u8], layer_index: u32) {
+		let size = texture.size();
+		let texture_data = pixel_data.repeat((size.width * size.height) as usize);
+		self.write_texture(
+			wgpu::ImageCopyTexture {
+				mip_level: 0,
+				origin: wgpu::Origin3d {
+					z: layer_index,
+					..Default::default()
+				},
+				texture,
+				aspect: wgpu::TextureAspect::All,
+			},
+			&texture_data,
+			wgpu::ImageDataLayout {
+				offset: 0,
+				bytes_per_row: Some(pixel_data.len() as u32 * size.width),
+				rows_per_image: None,
+			},
+			Extent3d {
+				depth_or_array_layers: 1,
+				..size
+			},
+		)
+	}
+}
+
 #[cfg(test)]
 mod tests {
+	use wgpu::util::DeviceExt;
+
 	use super::*;
 	use crate::*;
 
@@ -265,7 +337,7 @@ mod tests {
 	fn chart_pool() -> anyhow::Result<()> {
 		let context = test::WgpuTestContext::new()?;
 
-		let chart_descriptor = ChartDescriptor {
+		let chart_descriptor = TypedChartDescriptor {
 			texture: ChartTextureDescriptor {
 				size: Extent2d {
 					width: 128,
@@ -273,12 +345,41 @@ mod tests {
 				},
 				..Default::default()
 			},
-			..Default::default()
+			default_data: shaders::atlas::ChartData {
+				chart_to_canvas: glam::Mat4::IDENTITY
+			},
 		};
-		let mut pool = Rc::new(ChartPool::new(context.clone(), chart_descriptor));
-		let chart = pool.allocate();
+		let pool = Rc::new(ChartPool::new(context.clone(), Box::new(chart_descriptor)));
 
-		let test_texture = context.create_image_texture("test/input/cs-gray-7f7f7f.png");
+		let chart = pool.allocate();
+		chart.fill_texture(bytemuck::cast_slice(&[192u8, 64u8, 0u8, 128u8]));
+		assert_eq!(chart.pool_index, ChartPoolIndex::new(0, 0));
+
+		let chart = pool.allocate();
+		chart.fill_texture(bytemuck::cast_slice(&[128u8, 0u8, 64u8, 192u8]));
+		assert_eq!(chart.pool_index, ChartPoolIndex::new(1, 0));
+
+		let chart = pool.allocate();
+		chart.fill_texture(bytemuck::cast_slice(&[0u8, 64u8, 128u8, 255u8]));
+		assert_eq!(chart.pool_index, ChartPoolIndex::new(1, 1));
+
+		// Populate instance data buffer.
+		{
+			let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
+			contents.write(&[
+				shaders::atlas::ChartData {
+					chart_to_canvas: glam::Mat4::from_translation(glam::Vec3::new(-1f32, 0f32, 0f32))
+				},
+				shaders::atlas::ChartData {
+					chart_to_canvas: glam::Mat4::from_translation(glam::Vec3::new(0f32, -1f32, 0f32))
+				},
+			]).unwrap();
+			context.queue().write_buffer(
+				&pool.instance_data_buffer(1),
+				0,
+				&contents.into_inner(),
+			);
+		}
 
 		let device = context.device();
 		let module = shaders::atlas::create_shader_module(device);
@@ -289,12 +390,23 @@ mod tests {
 		});
 
 		use shaders::atlas::bind_groups::*;
-		let bind_group0 = BindGroup0::from_bindings(
+		let usage_bind_group = BindGroup0::from_bindings(
 			device,
 			BindGroupLayout0 {
 				chart_sampler: &chart_sampler,
 			},
 		);
+
+		let instance_input_buffer_layout =
+			shaders::chart::InstanceInput::vertex_buffer_layout(wgpu::VertexStepMode::Instance);
+		let instance_input_buffer =
+			context
+				.device()
+				.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+					label: Some("instance_input_buffer"),
+					contents: bytemuck::cast_slice(&[0u32, 1u32]),
+					usage: wgpu::BufferUsages::VERTEX,
+				});
 
 		let texture_format = wgpu::TextureFormat::Rgba8Unorm;
 		let pipeline = context
@@ -306,7 +418,7 @@ mod tests {
 					module: &module,
 					entry_point: shaders::atlas::ENTRY_VS_MAIN,
 					compilation_options: Default::default(),
-					buffers: &[],
+					buffers: &[instance_input_buffer_layout],
 				},
 				fragment: Some(shaders::atlas::fragment_state(
 					&module,
@@ -338,7 +450,6 @@ mod tests {
 				..Default::default()
 			},
 			move |view, encoder| {
-				let bind_group1 = pool.bind_group(0);
 				let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 					color_attachments: &[Some(wgpu::RenderPassColorAttachment {
 						view: &view,
@@ -352,10 +463,15 @@ mod tests {
 				});
 				// https://github.com/gfx-rs/wgpu-rs/blob/master/examples/texture-arrays/main.rs
 				render_pass.set_pipeline(&pipeline);
-				bind_group0.set(&mut render_pass);
-				bind_group1.set(&mut render_pass);
-				// render_pass.set_vertex_buffer(0, buffer_slice);
+				usage_bind_group.set(&mut render_pass);
+
+				render_pass.set_vertex_buffer(0, instance_input_buffer.slice(..));
+
+				pool.bind_group(0).set(&mut render_pass);
 				render_pass.draw(0..4, 0..1);
+
+				pool.bind_group(1).set(&mut render_pass);
+				render_pass.draw(0..4, 0..2);
 			},
 		)
 	}

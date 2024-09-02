@@ -1,13 +1,22 @@
-// @group(0) @binding(0)
-// var<uniform> chart_to_canvas: mat4x4<f32>;
+// usage
+@group(0) @binding(0)
+var chart_sampler: sampler;
 
-// @group(1) @binding(0)
-// var<uniform> canvas_to_view: mat4x4<f32>;
-
-struct VertexInput {
-	@builtin(vertex_index) vertex_index: u32,
-	@builtin(instance_index) instance_index: u32,
+// block
+struct ChartData {
+	chart_to_canvas: mat4x4<f32>,
 };
+@group(1) @binding(0)
+var chart_texture: texture_2d_array<f32>;  // [layer_index]
+@group(1) @binding(1)
+var<storage> chart_data: array<ChartData>;  // [layer_index]
+
+// chart
+struct InstanceInput {
+	@location(0) layer_index: u32,
+};
+
+//
 
 struct VertexOutput {
 	@builtin(position) clip_position: vec4<f32>,
@@ -17,23 +26,20 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
-	in: VertexInput,
+	@builtin(vertex_index) vertex_index: u32,
+	instance_in: InstanceInput,
 ) -> VertexOutput {
 	var out: VertexOutput;
-	let x = f32(in.vertex_index & 1u);
-	let y = 0.5 * f32(in.vertex_index & 2u);
-	// out.clip_position = canvas_to_view * chart_to_canvas * vec4<f32>(x, y, 0.0, 1.0);
-	out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
+	let x = f32(vertex_index & 1u);
+	let y = 0.5 * f32(vertex_index & 2u);
+	let layer_index = instance_in.layer_index;
+	let chart_datum = chart_data[layer_index];
+	out.clip_position = chart_datum.chart_to_canvas * vec4<f32>(x, y, 0.0, 1.0);
 	out.tex_coords = vec2<f32>(x, y);
 	// TODO: Get this from the instance buffer.
-	out.layer_index = 0u;
+	out.layer_index = layer_index;
 	return out;
 }
-
-@group(0) @binding(0)
-var chart_sampler: sampler;
-@group(1) @binding(0)
-var chart_texture: texture_2d_array<f32>;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {

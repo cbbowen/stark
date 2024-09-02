@@ -2,15 +2,11 @@ use crate::components::*;
 use crate::render;
 use crate::util::create_derived;
 use crate::*;
-use bytemuck::Zeroable;
-use encase::internal::WriteInto;
 use encase::ShaderType;
 use leptos::*;
 use leptos_use::use_element_size;
 use leptos_use::UseElementSizeReturn;
-use util::NodeRefExt;
-use wasm_bindgen::JsCast;
-use wgpu::util::RenderEncoder;
+use util::PointerCapture;
 use std::rc::Rc;
 use wgpu::util::DeviceExt;
 
@@ -342,27 +338,13 @@ pub fn Canvas() -> impl IntoView {
 			let (x, y) = (e.offset_x(), e.offset_y());
 			let pressure = e.pressure();
 			draw(x as f32 / width, y as f32 / height, pressure);
-			e.prevent_default();
-			e.set_cancel_bubble(true);
 		}
 	};
 
-	// let pointerdown = move |e: leptos::ev::PointerEvent| {
-	// 	let Some(target) = e.current_target() else { return };
-	// 	let Ok(target) = target.dyn_into::<web_sys::Element>() else { return };
-	// 	target.set_pointer_capture(e.pointer_id()).unwrap();
-	// 	tracing::trace!(target_node_name = target.node_name(), "pointerdown");
-	//    e.prevent_default();
-	// 	e.set_cancel_bubble(true);
-	// };
-
-	// let pointerup = move |e: leptos::ev::PointerEvent| {
-	// 	let Some(target) = e.current_target() else { return };
-	// 	let Ok(target) = target.dyn_into::<web_sys::Element>() else { return };
-	// 	target.release_pointer_capture(e.pointer_id()).unwrap();
-	// 	e.prevent_default();
-	// 	e.set_cancel_bubble(true);
-	// };
+	let pointerdown = move |e: leptos::ev::PointerEvent| {
+		e.set_pointer_capture();
+	   e.prevent_default();
+	};
 
 	view! {
 		<div class="Canvas">
@@ -372,8 +354,7 @@ pub fn Canvas() -> impl IntoView {
 				configure=configure
 				on:touchstart=touchstart
 				on:pointermove=pointermove
-				// on:pointerdown=pointerdown
-				// on:pointerup=pointerup
+				on:pointerdown=pointerdown
 			/>
 		</div>
 	}
