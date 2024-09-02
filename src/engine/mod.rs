@@ -100,25 +100,25 @@ struct ChartPoolBlock {
 	texture: wgpu::Texture,
 	texture_view: wgpu::TextureView,
 	instance_data_buffer: wgpu::Buffer,
-	bind_group: Rc<wgpu::BindGroup>,
+	bind_group: Rc<crate::shaders::atlas::bind_groups::BindGroup1>,
 }
 
 impl ChartPoolBlock {
 	pub fn new(
 		context: &WgpuContext,
 		descriptor: &ChartDescriptor,
-		bind_group_layout: &wgpu::BindGroupLayout,
+		// bind_group_layout: &wgpu::BindGroupLayout,
 		block_size: NonZeroU32,
 	) -> Self {
-		let texture = context
-			.device()
+		let device = context.device();
+		let texture = device
 			.create_texture(&descriptor.texture.to_texture_descriptor(block_size.get()));
 
 		let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
 			dimension: Some(wgpu::TextureViewDimension::D2Array),
 			..Default::default()
 		});
-		let instance_data_buffer = context.device().create_buffer(&wgpu::BufferDescriptor {
+		let instance_data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
 			label: None,
 			size: block_size.get() as wgpu::BufferAddress * descriptor.instance_data.array_stride,
 			usage: wgpu::BufferUsages::VERTEX
@@ -126,17 +126,20 @@ impl ChartPoolBlock {
 				| wgpu::BufferUsages::COPY_SRC,
 			mapped_at_creation: false,
 		});
-		let bind_group = context
-			.device()
-			.create_bind_group(&wgpu::BindGroupDescriptor {
-				label: None,
-				layout: bind_group_layout,
-				entries: &[wgpu::BindGroupEntry {
-					binding: 0,
-					// TODO: We could do this with a single bind group by using a `TextureViewArray`.
-					resource: wgpu::BindingResource::TextureView(&texture_view),
-				}],
-			});
+		// let bind_group = device
+		// 	.create_bind_group(&wgpu::BindGroupDescriptor {
+		// 		label: None,
+		// 		layout: bind_group_layout,
+		// 		entries: &[wgpu::BindGroupEntry {
+		// 			binding: 0,
+		// 			// TODO: We could do this with a single bind group by using a `TextureViewArray`.
+		// 			resource: wgpu::BindingResource::TextureView(&texture_view),
+		// 		}],
+		// 	});
+		use crate::shaders::atlas::bind_groups::*;
+		let bind_group = BindGroup1::from_bindings(device, BindGroupLayout1 {
+			chart_texture: &texture_view,
+		});
 		let bind_group = Rc::new(bind_group);
 		Self {
 			texture,
@@ -158,35 +161,35 @@ pub struct ChartPool {
 	descriptor: ChartDescriptor,
 	blocks: RefCell<Vec<ChartPoolBlock>>,
 	free_list: RefCell<Vec<ChartPoolIndex>>,
-	bind_group_layout: wgpu::BindGroupLayout,
+	// bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl ChartPool {
 	pub fn new(context: Rc<WgpuContext>, descriptor: ChartDescriptor) -> Self {
-		let bind_group_layout =
-			context
-				.device()
-				.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-					label: None,
-					entries: &[wgpu::BindGroupLayoutEntry {
-						binding: 0,
-						visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-						// TODO: We could do this with a single bind group by using an array of
-						// textures.
-						count: None,
-						ty: wgpu::BindingType::Texture {
-							sample_type: wgpu::TextureSampleType::Float { filterable: true },
-							view_dimension: wgpu::TextureViewDimension::D2Array,
-							multisampled: false,
-						},
-					}],
-				});
+		// let bind_group_layout =
+		// 	context
+		// 		.device()
+		// 		.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+		// 			label: None,
+		// 			entries: &[wgpu::BindGroupLayoutEntry {
+		// 				binding: 0,
+		// 				visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+		// 				// TODO: We could do this with a single bind group by using an array of
+		// 				// textures.
+		// 				count: None,
+		// 				ty: wgpu::BindingType::Texture {
+		// 					sample_type: wgpu::TextureSampleType::Float { filterable: true },
+		// 					view_dimension: wgpu::TextureViewDimension::D2Array,
+		// 					multisampled: false,
+		// 				},
+		// 			}],
+		// 		});
 		Self {
 			context,
 			descriptor,
 			blocks: Default::default(),
 			free_list: Default::default(),
-			bind_group_layout,
+			// bind_group_layout,
 		}
 	}
 
@@ -205,7 +208,7 @@ impl ChartPool {
 		let block = ChartPoolBlock::new(
 			&self.context,
 			&self.descriptor,
-			&self.bind_group_layout,
+			// &self.bind_group_layout,
 			block_size,
 		);
 		blocks.push(block);
@@ -233,13 +236,13 @@ impl ChartPool {
 		self.free_list.borrow_mut().push(index)
 	}
 
-	pub fn bind_group(&self, block_index: usize) -> Rc<wgpu::BindGroup> {
+	pub fn bind_group(&self, block_index: usize) -> Rc<crate::shaders::atlas::bind_groups::BindGroup1> {
 		self.blocks.borrow()[block_index].bind_group.clone()
 	}
 
-	pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
-		&self.bind_group_layout
-	}
+	// pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+	// 	&self.bind_group_layout
+	// }
 }
 
 pub struct Chart {
@@ -277,65 +280,42 @@ mod tests {
 
 		let test_texture = context.create_image_texture("test/input/cs-gray-7f7f7f.png");
 
-		let sampler_bind_group_layout =
-			context
-				.device()
-				.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-					label: None,
-					entries: &[wgpu::BindGroupLayoutEntry {
-						binding: 0,
-						visibility: wgpu::ShaderStages::FRAGMENT,
-						ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-						count: None,
-					}],
-				});
-		let sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
+		let device = context.device();
+		let module = shaders::atlas::create_shader_module(device);
+		let layout = shaders::atlas::create_pipeline_layout(device);
+
+		let chart_sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
 			..Default::default()
 		});
-		let sampler_bind_group = context
-			.device()
-			.create_bind_group(&wgpu::BindGroupDescriptor {
-				label: None,
-				layout: &sampler_bind_group_layout,
-				entries: &[wgpu::BindGroupEntry {
-					binding: 0,
-					resource: wgpu::BindingResource::Sampler(&sampler),
-				}],
-			});
 
-		let shader_module = context
-			.device()
-			.create_shader_module(wgpu::include_wgsl!("atlas.wgsl"));
-		let render_pipeline_layout =
-			context
-				.device()
-				.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-					label: None,
-					bind_group_layouts: &[pool.bind_group_layout(), &sampler_bind_group_layout],
-					push_constant_ranges: &[],
-				});
+		use shaders::atlas::bind_groups::*;
+		let bind_group0 = BindGroup0::from_bindings(
+			device,
+			BindGroupLayout0 {
+				chart_sampler: &chart_sampler,
+			},
+		);
+
 		let texture_format = wgpu::TextureFormat::Rgba8Unorm;
 		let pipeline = context
 			.device()
 			.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 				label: None,
-				layout: Some(&render_pipeline_layout),
+				layout: Some(&layout),
 				vertex: wgpu::VertexState {
-					module: &shader_module,
-					entry_point: "vs_main",
+					module: &module,
+					entry_point: shaders::atlas::ENTRY_VS_MAIN,
 					compilation_options: Default::default(),
 					buffers: &[],
 				},
-				fragment: Some(wgpu::FragmentState {
-					module: &shader_module,
-					entry_point: "fs_main",
-					compilation_options: Default::default(),
-					targets: &[Some(wgpu::ColorTargetState {
+				fragment: Some(shaders::atlas::fragment_state(
+					&module,
+					&shaders::atlas::fs_main_entry([Some(wgpu::ColorTargetState {
 						format: texture_format,
 						blend: Some(wgpu::BlendState::ALPHA_BLENDING),
 						write_mask: wgpu::ColorWrites::ALL,
-					})],
-				}),
+					})]),
+				)),
 				primitive: wgpu::PrimitiveState {
 					topology: wgpu::PrimitiveTopology::TriangleStrip,
 					strip_index_format: None,
@@ -358,7 +338,7 @@ mod tests {
 				..Default::default()
 			},
 			move |view, encoder| {
-				let bind_group = pool.bind_group(0);
+				let bind_group1 = pool.bind_group(0);
 				let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 					color_attachments: &[Some(wgpu::RenderPassColorAttachment {
 						view: &view,
@@ -372,8 +352,8 @@ mod tests {
 				});
 				// https://github.com/gfx-rs/wgpu-rs/blob/master/examples/texture-arrays/main.rs
 				render_pass.set_pipeline(&pipeline);
-				render_pass.set_bind_group(0, &bind_group, &[]);
-				render_pass.set_bind_group(1, &sampler_bind_group, &[]);
+				bind_group0.set(&mut render_pass);
+				bind_group1.set(&mut render_pass);
 				// render_pass.set_vertex_buffer(0, buffer_slice);
 				render_pass.draw(0..4, 0..1);
 			},

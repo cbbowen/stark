@@ -31,9 +31,9 @@ fn vs_main(
 }
 
 @group(0) @binding(0)
-var chart_texture: texture_2d_array<f32>;
-@group(1) @binding(0)
 var chart_sampler: sampler;
+@group(1) @binding(0)
+var chart_texture: texture_2d_array<f32>;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
