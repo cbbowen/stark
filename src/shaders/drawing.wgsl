@@ -1,5 +1,6 @@
 struct DrawingAction {
    position: vec2<f32>,
+	seed: vec2<f32>,
 };
 @group(0) @binding(0)
 var<uniform> action: DrawingAction;
@@ -28,6 +29,13 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-	let alpha = 0.05 * max(0.0, 1.0 - dot(in.tex_coords, in.tex_coords));
-	return vec4<f32>(0.75, vec2(0.1, 0.35) * sin(in.tex_coords / 1.57079632679), alpha);
+	let c = in.tex_coords + 0.02 * dither(in.clip_position.xy + action.seed);
+	let alpha = 0.1 * max(0.0, 1.0 - dot(c, c));
+	return vec4<f32>(0.75, vec2(0.02, 0.15) * sin(c * 1.57079632679), alpha);
+}
+
+fn dither(co: vec2<f32>) -> vec2<f32> {
+	let a = sin(dot(co.xy, vec2(12.9898, 78.233)));
+	let b = (co.xy + vec2(43758.5453, 29443.5016));
+	return fract(a * b) - 0.5;
 }

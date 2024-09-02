@@ -30,7 +30,6 @@ pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input: ShaderModuleInput = syn::parse_macro_input!(input);
     let options = wgsl_to_wgpu::WriteOptions {
         derive_bytemuck_vertex: true,
-        derive_bytemuck_host_shareable: true,
         derive_encase_host_shareable: true,
         matrix_vector_types: MatrixVectorTypes::Glam,
         ..Default::default()

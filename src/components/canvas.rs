@@ -3,9 +3,12 @@ use crate::render;
 use crate::util::create_derived;
 use crate::*;
 use bytemuck::Zeroable;
+use encase::internal::WriteInto;
+use encase::ShaderType;
 use leptos::*;
 use leptos_use::use_element_size;
 use leptos_use::UseElementSizeReturn;
+use wgpu::util::RenderEncoder;
 use std::rc::Rc;
 use wgpu::util::DeviceExt;
 
@@ -86,9 +89,10 @@ fn create_drawing_action_bind_group(
 	device: &wgpu::Device,
 ) -> (shaders::drawing::bind_groups::BindGroup0, wgpu::Buffer) {
 	use shaders::drawing::bind_groups::*;
+	let contents: Vec<_> = std::iter::repeat(0u8).take(shaders::drawing::DrawingAction::min_size().get() as usize).collect();
 	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("drawing_action"),
-		contents: bytemuck::cast_slice(&[shaders::drawing::DrawingAction::zeroed()]),
+		contents: bytemuck::cast_slice(&contents),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
 	let bind_group = BindGroup0::from_bindings(
@@ -282,12 +286,15 @@ pub fn Canvas() -> impl IntoView {
 						label: Some("Drawing Encoder"),
 					});
 
+			let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
+			contents.write(&shaders::drawing::DrawingAction {
+				position: glam::Vec2::new(x as f32, y as f32),
+				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
+			}).unwrap();
 			context.queue().write_buffer(
 				&drawing_action_buffer,
 				0,
-				bytemuck::cast_slice(&[shaders::drawing::DrawingAction {
-					position: glam::Vec2::new(x as f32, y as f32),
-				}]),
+				&contents.into_inner(),
 			);
 
 			{

@@ -26,6 +26,7 @@ encase = { version = "0.9.0", features = ["glam"] }
 # This must match the version supported by encase.
 glam = { version = "0.28", features = ["bytemuck"] }
 wgsl_to_wgpu_macro = { path = "deps/wgsl_to_wgpu_macro" }
+fastrand = "2.1"
 
 [dev-dependencies]
 wasm-bindgen = "0.2"
