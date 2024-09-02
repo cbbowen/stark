@@ -2685,6 +2685,7 @@ dependencies = [
 [[package]]
 name = "wgsl_to_wgpu"
 version = "0.10.0"
+source = "git+https://github.com/ScanMountGoat/wgsl_to_wgpu.git#f5e68e40586944d245f875a1b3a54442e8fc059f"
 dependencies = [
  "case",
  "naga",

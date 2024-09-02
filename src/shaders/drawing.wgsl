@@ -35,7 +35,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	let softness = 0.5;
 	let opacity = sqrt(action.pressure) * 0.05;
 	let alpha = opacity * pow(max(0.0, 1.0 - dot(c, c)), softness);
-	return vec4<f32>(0.75, vec2(0.02, 0.15) * sin(c * 1.57079632679), alpha);
+	return vec4<f32>(0.75, vec2(0.03, 0.15) * sin(c * 1.57079632679), alpha);
 }
 
 fn dither(co: vec2<f32>) -> vec2<f32> {

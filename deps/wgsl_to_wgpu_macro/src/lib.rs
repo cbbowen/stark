@@ -1,5 +1,6 @@
 extern crate proc_macro;
 use quote::quote;
+use std::str::FromStr;
 use wgsl_to_wgpu::*;
 
 struct ShaderModuleInput {
@@ -40,8 +41,10 @@ pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let wgsl_source = std::fs::read_to_string(current_path.join(&wgsl_path)).unwrap();
     let rs_source =
-        create_shader_module_tokens(&wgsl_source, Some(&wgsl_path.to_string_lossy()), options)
-            .unwrap();
+        create_shader_module(&wgsl_source, &wgsl_path.to_string_lossy(), options).unwrap();
+
+    // We're going more work than strictly necessary here because `wgsl_to_wgpu` internally produces a `TokenStream`, but that's not a big concern.
+    let rs_source: proc_macro2::TokenStream = rs_source.parse().unwrap();
 
     let name_parts: Vec<_> = wgsl_path
         .with_extension("")
