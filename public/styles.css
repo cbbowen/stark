@@ -1,5 +1,9 @@
 /* Consider switching to `stylers`: https://github.com/abishekatp/stylers. */
 
+body {
+	margin: 0px
+}
+
 .RenderSurface {
 	width: 100%;
 	aspect-ratio: 1/1;

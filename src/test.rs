@@ -52,15 +52,16 @@ impl WgpuTestContext {
 		let context = pollster::block_on(WgpuContext::new())?;
 		let device = context.device();
 
+		let copy_scaled = render::Shader {
+			module: shaders::copy_scaled::create_shader_module(device),
+			layout: shaders::copy_scaled::create_pipeline_layout(device),
+		}
+		.into();
+
 		let context = Rc::new(context);
 		Ok(Self {
 			context,
-
-			copy_scaled: render::Shader {
-				module: shaders::copy_scaled::create_shader_module(device),
-				layout: shaders::copy_scaled::create_pipeline_layout(device),
-			}
-			.into(),
+			copy_scaled,
 		})
 	}
 
@@ -111,22 +112,24 @@ impl WgpuTestContext {
 		});
 
 		use shaders::copy_scaled::*;
+		let module = &self.copy_scaled.module;
 		let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 			label: None,
 			layout: Some(&self.copy_scaled.layout),
 			vertex: wgpu::VertexState {
-				module: &self.copy_scaled.module,
+				module,
 				entry_point: ENTRY_VS_MAIN,
 				compilation_options: Default::default(),
 				buffers: &[],
 			},
-			fragment: Some(fragment_state(fs_main_entry([Some(
-				wgpu::ColorTargetState {
+			fragment: Some(fragment_state(
+				module,
+				&fs_main_entry([Some(wgpu::ColorTargetState {
 					format: destination.format(),
 					blend: Some(wgpu::BlendState::REPLACE),
 					write_mask: wgpu::ColorWrites::ALL,
-				},
-			)]))),
+				})]),
+			)),
 			primitive: wgpu::PrimitiveState {
 				topology: wgpu::PrimitiveTopology::TriangleStrip,
 				strip_index_format: None,
@@ -163,7 +166,7 @@ impl WgpuTestContext {
 				..Default::default()
 			});
 			render_pass.set_pipeline(&pipeline);
-			render_pass.set_bind_group(0, &bind_group, &[]);
+			bind_group.set(&mut render_pass);
 			render_pass.draw(0..4, 0..1);
 		}
 		self.queue().submit([command_encoder.finish()]);

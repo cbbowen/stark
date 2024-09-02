@@ -25,6 +25,7 @@ fn vs_main(
 	// out.clip_position = canvas_to_view * chart_to_canvas * vec4<f32>(x, y, 0.0, 1.0);
 	out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
 	out.tex_coords = vec2<f32>(x, y);
+	// TODO: Get this from the instance buffer.
 	out.layer_index = 0u;
 	return out;
 }

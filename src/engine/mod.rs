@@ -133,7 +133,7 @@ impl ChartPoolBlock {
 				layout: bind_group_layout,
 				entries: &[wgpu::BindGroupEntry {
 					binding: 0,
-					// TODO: We could do this with a single bind group by usinga `TextureViewArray`.
+					// TODO: We could do this with a single bind group by using a `TextureViewArray`.
 					resource: wgpu::BindingResource::TextureView(&texture_view),
 				}],
 			});
