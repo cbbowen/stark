@@ -2684,8 +2684,9 @@ dependencies = [
 
 [[package]]
 name = "wgsl_to_wgpu"
-version = "0.10.0"
-source = "git+https://github.com/cbbowen/wgsl_to_wgpu.git#0700c475693bbedda534603766c9f5ac05d711ae"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1a25b22047b4cfc32f5d4a745f11b1596966ac13c03aa4bd502c0c4e5b44a1d"
 dependencies = [
  "case",
  "naga",
@@ -2699,7 +2700,7 @@ dependencies = [
 
 [[package]]
 name = "wgsl_to_wgpu_macro"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "proc-macro2",
  "quote",

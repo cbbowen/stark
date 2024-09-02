@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "wgsl_to_wgpu"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "case",
  "naga",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "wgsl_to_wgpu_macro"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "proc-macro2",
  "quote",

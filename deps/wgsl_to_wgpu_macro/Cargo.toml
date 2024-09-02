@@ -1,6 +1,6 @@
 [package]
 name = "wgsl_to_wgpu_macro"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2021"
 
 [lib]
@@ -10,4 +10,4 @@ proc-macro = true
 syn = "2.0"
 quote = "1.0"
 proc-macro2 = "1.0"
-wgsl_to_wgpu = { git = "https://github.com/cbbowen/wgsl_to_wgpu.git" }
+wgsl_to_wgpu = "0.10.1"
