@@ -8,6 +8,8 @@ use encase::ShaderType;
 use leptos::*;
 use leptos_use::use_element_size;
 use leptos_use::UseElementSizeReturn;
+use util::NodeRefExt;
+use wasm_bindgen::JsCast;
 use wgpu::util::RenderEncoder;
 use std::rc::Rc;
 use wgpu::util::DeviceExt;
@@ -277,7 +279,7 @@ pub fn Canvas() -> impl IntoView {
 		let canvas_texture_view = Rc::new(canvas_texture_view);
 		let drawing_action_bind_group = Rc::new(drawing_action_bind_group);
 		let drawing_action_buffer = Rc::new(drawing_action_buffer);
-		move |x: f64, y: f64| {
+		move |x: f32, y: f32, pressure: f32| {
 			let drawing_action_bind_group = drawing_action_bind_group.clone();
 			let mut encoder =
 				context
@@ -289,6 +291,7 @@ pub fn Canvas() -> impl IntoView {
 			let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
 			contents.write(&shaders::drawing::DrawingAction {
 				position: glam::Vec2::new(x as f32, y as f32),
+				pressure,
 				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
 			}).unwrap();
 			context.queue().write_buffer(
@@ -327,14 +330,39 @@ pub fn Canvas() -> impl IntoView {
 	let render_surface_element = create_node_ref();
 	let UseElementSizeReturn { width, height } = use_element_size(render_surface_element);
 
+	let touchstart = move |e: leptos::ev::TouchEvent| {
+		e.prevent_default();
+	};
+
 	let pointermove = move |e: leptos::ev::PointerEvent| {
-		let width = width.get_untracked();
-		let height = height.get_untracked();
+		let width = width.get_untracked() as f32;
+		let height = height.get_untracked() as f32;
+		// tracing::trace!(pointer_type = e.pointer_type(), "pointermove");
 		if e.buttons() & 1 != 0 || e.pointer_type() != "mouse" {
 			let (x, y) = (e.offset_x(), e.offset_y());
-			draw(x as f64 / width, y as f64 / height);
+			let pressure = e.pressure();
+			draw(x as f32 / width, y as f32 / height, pressure);
+			e.prevent_default();
+			e.set_cancel_bubble(true);
 		}
 	};
+
+	// let pointerdown = move |e: leptos::ev::PointerEvent| {
+	// 	let Some(target) = e.current_target() else { return };
+	// 	let Ok(target) = target.dyn_into::<web_sys::Element>() else { return };
+	// 	target.set_pointer_capture(e.pointer_id()).unwrap();
+	// 	tracing::trace!(target_node_name = target.node_name(), "pointerdown");
+	//    e.prevent_default();
+	// 	e.set_cancel_bubble(true);
+	// };
+
+	// let pointerup = move |e: leptos::ev::PointerEvent| {
+	// 	let Some(target) = e.current_target() else { return };
+	// 	let Ok(target) = target.dyn_into::<web_sys::Element>() else { return };
+	// 	target.release_pointer_capture(e.pointer_id()).unwrap();
+	// 	e.prevent_default();
+	// 	e.set_cancel_bubble(true);
+	// };
 
 	view! {
 		<div class="Canvas">
@@ -342,7 +370,10 @@ pub fn Canvas() -> impl IntoView {
 				node_ref=render_surface_element
 				render=render
 				configure=configure
+				on:touchstart=touchstart
 				on:pointermove=pointermove
+				// on:pointerdown=pointerdown
+				// on:pointerup=pointerup
 			/>
 		</div>
 	}
