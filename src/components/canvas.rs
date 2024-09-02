@@ -324,7 +324,8 @@ pub fn Canvas() -> impl IntoView {
 		let width = width.get_untracked();
 		let height = height.get_untracked();
 		if e.buttons() & 1 != 0 {
-			draw(e.x() as f64 / width, e.y() as f64 / height);
+			let (x, y) = (e.offset_x(), e.offset_y());
+			draw(x as f64 / width, y as f64 / height);
 		}
 	};
 
