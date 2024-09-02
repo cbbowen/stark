@@ -26,7 +26,7 @@ impl syn::parse::Parse for ShaderModuleInput {
 }
 
 #[proc_macro]
-pub fn shader_module(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input: ShaderModuleInput = syn::parse_macro_input!(input);
     let options = wgsl_to_wgpu::WriteOptions {
         derive_bytemuck_vertex: true,

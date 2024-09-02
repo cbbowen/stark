@@ -55,8 +55,8 @@ fn create_canvas_texture_view(
 ) -> wgpu::TextureView {
 	let texture = device.create_texture(&wgpu::TextureDescriptor {
 		size: wgpu::Extent3d {
-			width: 8192,
-			height: 8192,
+			width: 4096,
+			height: 4096,
 			depth_or_array_layers: 1,
 		},
 		mip_level_count: 1,
@@ -320,10 +320,10 @@ pub fn Canvas() -> impl IntoView {
 	let render_surface_element = create_node_ref();
 	let UseElementSizeReturn { width, height } = use_element_size(render_surface_element);
 
-	let mousemove = move |e: leptos::ev::MouseEvent| {
+	let pointermove = move |e: leptos::ev::PointerEvent| {
 		let width = width.get_untracked();
 		let height = height.get_untracked();
-		if e.buttons() & 1 != 0 {
+		if e.buttons() & 1 != 0 || e.pointer_type() != "mouse" {
 			let (x, y) = (e.offset_x(), e.offset_y());
 			draw(x as f64 / width, y as f64 / height);
 		}
@@ -335,7 +335,7 @@ pub fn Canvas() -> impl IntoView {
 				node_ref=render_surface_element
 				render=render
 				configure=configure
-				on:mousemove=mousemove
+				on:pointermove=pointermove
 			/>
 		</div>
 	}
