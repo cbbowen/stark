@@ -8,3 +8,6 @@ pub mod fallback;
 
 mod canvas;
 pub use canvas::*;
+
+mod color_picker;
+pub use color_picker::*;

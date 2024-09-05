@@ -8,6 +8,7 @@ use std::rc::Rc;
 pub struct Resources {
 	pub canvas: Rc<Shader>,
 	pub drawing: Rc<Shader>,
+	pub color_picker: Rc<Shader>,
 }
 
 impl Resources {
@@ -21,6 +22,11 @@ impl Resources {
 			drawing: Shader {
 				module: shaders::drawing::create_shader_module(device),
 				layout: shaders::drawing::create_pipeline_layout(device),
+			}.into(),
+
+			color_picker: Shader {
+				module: shaders::color_picker::create_shader_module(device),
+				layout: shaders::color_picker::create_pipeline_layout(device),
 			}.into(),
 		}
 	}

@@ -154,7 +154,7 @@ fn create_drawing_pipeline(
 		layout: Some(&shader.layout),
 		vertex: wgpu::VertexState {
 			module: &shader.module,
-			entry_point: "vs_main",
+			entry_point: ENTRY_VS_MAIN,
 			compilation_options: Default::default(),
 			buffers: &[],
 		},
@@ -259,7 +259,7 @@ pub fn Canvas() -> impl IntoView {
 	let configure = {
 		let context = context.clone();
 		move |args: render_surface::ConfigureArgs| {
-			tracing::info!("configure");
+			tracing::info!("Canvas::configure");
 			let (surface, width, height) = args;
 			let default = surface.get_default_config(context.adapter(), width, height)?;
 			Some(wgpu::SurfaceConfiguration {

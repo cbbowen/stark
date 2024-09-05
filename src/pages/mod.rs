@@ -27,6 +27,7 @@ pub fn Home() -> impl IntoView {
 			<ShaderModulesProvider>
 				<div class="Home">
 					<Canvas/>
+					<ColorPicker/>
 				</div>
 			</ShaderModulesProvider>
 		</RenderContextProvider>
