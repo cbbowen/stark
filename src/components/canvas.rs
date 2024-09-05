@@ -114,15 +114,14 @@ fn create_canvas_bind_groups(
 
 	let chart_to_canvas_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("chart_to_canvas"),
-		contents: bytemuck::cast_slice(&[geom::Similar2f::default().to_mat4x4_uniform()]),
+		contents: bytemuck::cast_slice(&[glam::Mat4::IDENTITY]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
 
-	let canvas_to_view =
-		geom::Similar2f::new(geom::Scale2f::new(2.0), geom::Trans2f::new(-1.0, -1.0));
+	let canvas_to_view = glam::Mat4::from_scale_rotation_translation(2.0 * glam::Vec3::new(1.0, 1.0, 0.0), glam::Quat::IDENTITY, glam::Vec3::new(-1.0, -1.0, 0.0)); 
 	let canvas_to_view_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("canvas_to_view"),
-		contents: bytemuck::cast_slice(&[canvas_to_view.to_mat4x4_uniform()]),
+		contents: bytemuck::cast_slice(&[canvas_to_view]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
 

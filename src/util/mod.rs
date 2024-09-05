@@ -18,6 +18,7 @@ pub use result_ext::*;
 mod once;
 pub use once::*;
 use wasm_bindgen::JsCast;
+use wgpu::Extent3d;
 
 /// It is useful to think of signals as having two channels:
 ///
@@ -119,5 +120,41 @@ impl PointerCapture for leptos::ev::PointerEvent {
 					.ok_or_log()
 			})
 			.is_some()
+	}
+}
+
+pub trait QueueExt {
+	fn fill_texture_layer(&self, texture: &wgpu::Texture, pixel_data: &[u8], layer_index: u32);
+	fn fill_texture(&self, texture: &wgpu::Texture, pixel_data: &[u8]) {
+		assert_eq!(texture.depth_or_array_layers(), 1);
+		self.fill_texture_layer(texture, pixel_data, 0)
+	}
+}
+
+impl QueueExt for wgpu::Queue {
+	fn fill_texture_layer(&self, texture: &wgpu::Texture, pixel_data: &[u8], layer_index: u32) {
+		let size = texture.size();
+		let texture_data = pixel_data.repeat((size.width * size.height) as usize);
+		self.write_texture(
+			wgpu::ImageCopyTexture {
+				mip_level: 0,
+				origin: wgpu::Origin3d {
+					z: layer_index,
+					..Default::default()
+				},
+				texture,
+				aspect: wgpu::TextureAspect::All,
+			},
+			&texture_data,
+			wgpu::ImageDataLayout {
+				offset: 0,
+				bytes_per_row: Some(pixel_data.len() as u32 * size.width),
+				rows_per_image: None,
+			},
+			Extent3d {
+				depth_or_array_layers: 1,
+				..size
+			},
+		)
 	}
 }
