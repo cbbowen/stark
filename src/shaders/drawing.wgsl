@@ -36,7 +36,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	let opacity = sqrt(action.pressure) * 0.05;
 	let alpha = opacity * pow(max(0.0, 1.0 - dot(c, c)), softness);
 
-	let brightness = 0.75;
+	let brightness = 0.71;
 	let offset = vec2(0.02, 0.02);
 	let scale = vec2(0.02, 0.14);
 
