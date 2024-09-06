@@ -15,6 +15,8 @@ pub fn ShaderModulesProvider(children: Children) -> impl IntoView
 
 #[component]
 pub fn Home() -> impl IntoView {
+	let drawing_color = leptos::create_rw_signal(glam::Vec3::ONE);
+
 	view! {
 		<Title text="Home"/>
 		<RenderContextProvider
@@ -26,8 +28,8 @@ pub fn Home() -> impl IntoView {
 			}>
 			<ShaderModulesProvider>
 				<div class="Home">
-					<Canvas/>
-					<ColorPicker/>
+					<Canvas drawing_color=drawing_color/>
+					<ColorPicker color=drawing_color/>
 				</div>
 			</ShaderModulesProvider>
 		</RenderContextProvider>

@@ -1,6 +1,6 @@
 use super::render_surface;
 use crate::shaders::color_picker::*;
-use crate::util::create_derived;
+use crate::util::*;
 use crate::{render, WgpuContext};
 use leptos::{component, event_target_value, view, IntoView};
 use leptos::{expect_context, prelude::*};
@@ -61,8 +61,12 @@ fn create_render_pipeline(
 }
 
 #[component]
-pub fn ColorPicker() -> impl IntoView {
-	let (lightness, set_lightness) = create_signal(0.5);
+pub fn ColorPicker(
+	color: leptos::RwSignal<glam::Vec3>
+) -> impl IntoView {
+	// Create a lens into `color`.
+	let lightness = create_memo(move |_| color.get().x);
+	let set_lightness = move |l| color.update(|lab| lab.x = l);
 
 	let context: Rc<WgpuContext> = expect_context();
 	let resources: render::Resources = expect_context();
@@ -141,6 +145,24 @@ pub fn ColorPicker() -> impl IntoView {
 		}
 	};
 
+	let touchstart = move |e: leptos::ev::TouchEvent| {
+		e.prevent_default();
+	};
+
+	let pointermove = move |e: leptos::ev::PointerEvent| {
+		if e.buttons() & 1 != 0 || e.pointer_type() != "mouse" {
+			let Some(xy) = e.get_coordinates() else { return };
+			let ab = (xy - glam::Vec2::new(-0.09, 0.24)) / 3.8;
+			color.update(|lab| { lab.y = ab.x; lab.z = ab.y; });
+			tracing::trace!(color=?color.get(), "ColorPicker::pointermove");
+		}
+	};
+
+	let pointerdown = move |e: leptos::ev::PointerEvent| {
+		e.set_pointer_capture();
+	   e.prevent_default();
+	};
+
 	view! {
 		<div class="ColorPicker">
 			<input
@@ -149,14 +171,16 @@ pub fn ColorPicker() -> impl IntoView {
 				max="1"
 				step="0.001"
 				prop:value=lightness
-				on:input=move |ev| { set_lightness.set(event_target_value(&ev).parse().unwrap()) }
+				on:input=move |ev| { set_lightness(event_target_value(&ev).parse().unwrap()) }
 			/>
 
 			<span>{lightness}</span>
 			<render_surface::RenderSurface
 				render=render
 				configure=configure
-			></render_surface::RenderSurface>
+				on:touchstart=touchstart
+				on:pointermove=pointermove
+				on:pointerdown=pointerdown/>
 		</div>
 	}
 }

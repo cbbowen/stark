@@ -123,6 +123,24 @@ impl PointerCapture for leptos::ev::PointerEvent {
 	}
 }
 
+pub trait CoordinateSource {
+	fn get_coordinates(&self) -> Option<glam::Vec2>;
+}
+
+impl CoordinateSource for leptos::ev::PointerEvent {
+	fn get_coordinates(&self) -> Option<glam::Vec2> {
+		let element = self
+			.current_target()
+			.and_then(|target| target.dyn_into::<web_sys::Element>().ok_or_log())?;
+		let (x, y) = (self.offset_x(), self.offset_y());
+		let normalized = glam::Vec2::new(
+			x as f32 / element.client_width() as f32,
+			y as f32 / element.client_height() as f32,
+		);
+		Some(glam::Vec2::new(2.0, -2.0) * (normalized - 0.5))
+	}
+}
+
 pub trait QueueExt {
 	fn fill_texture_layer(&self, texture: &wgpu::Texture, pixel_data: &[u8], layer_index: u32);
 	fn fill_texture(&self, texture: &wgpu::Texture, pixel_data: &[u8]) {

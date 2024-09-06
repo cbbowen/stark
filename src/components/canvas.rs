@@ -183,7 +183,10 @@ fn create_drawing_pipeline(
 }
 
 #[component]
-pub fn Canvas() -> impl IntoView {
+pub fn Canvas(
+	#[prop(into)]
+	drawing_color: Signal<glam::Vec3>,
+) -> impl IntoView {
 	let context: Rc<WgpuContext> = expect_context();
 	let resources: render::Resources = expect_context();
 
@@ -274,7 +277,7 @@ pub fn Canvas() -> impl IntoView {
 		let canvas_texture_view = Rc::new(canvas_texture_view);
 		let drawing_action_bind_group = Rc::new(drawing_action_bind_group);
 		let drawing_action_buffer = Rc::new(drawing_action_buffer);
-		move |x: f32, y: f32, pressure: f32| {
+		move |x: f32, y: f32, pressure: f32, color: glam::Vec3| {
 			let drawing_action_bind_group = drawing_action_bind_group.clone();
 			let mut encoder =
 				context
@@ -288,6 +291,7 @@ pub fn Canvas() -> impl IntoView {
 				position: glam::Vec2::new(x as f32, y as f32),
 				pressure,
 				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
+				color,
 			}).unwrap();
 			context.queue().write_buffer(
 				&drawing_action_buffer,
@@ -336,7 +340,7 @@ pub fn Canvas() -> impl IntoView {
 		if e.buttons() & 1 != 0 || e.pointer_type() != "mouse" {
 			let (x, y) = (e.offset_x(), e.offset_y());
 			let pressure = e.pressure();
-			draw(x as f32 / width, y as f32 / height, pressure);
+			draw(x as f32 / width, y as f32 / height, pressure, drawing_color.get_untracked());
 		}
 	};
 
