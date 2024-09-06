@@ -11,3 +11,7 @@ syn = "2.0"
 quote = "1.0"
 proc-macro2 = "1.0"
 wgsl_to_wgpu = "0.10.1"
+regex = "1.10"
+
+[features]
+track_path = []

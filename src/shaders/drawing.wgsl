@@ -1,3 +1,5 @@
+// include!("dither.wgsl")
+
 struct DrawingAction {
    position: vec2<f32>,
 	pressure: f32,
@@ -41,10 +43,4 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	let scale = vec2(0.02, 0.14);
 
 	return vec4(brightness, offset + scale * sin(c * 1.57079632679), alpha);
-}
-
-fn dither(co: vec2<f32>) -> vec2<f32> {
-	let a = sin(dot(co.xy, vec2(12.9898, 78.233)));
-	let b = (co.xy + vec2(43758.5453, 29443.5016));
-	return fract(a * b) - 0.5;
 }

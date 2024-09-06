@@ -1,3 +1,5 @@
+// include!("oklab.wgsl")
+
 @group(0) @binding(0)
 var<uniform> chart_to_canvas: mat4x4<f32>;
 @group(0) @binding(1)
@@ -28,30 +30,5 @@ fn vs_main(
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	let oklab = textureSample(chart_texture, chart_sampler, in.tex_coords);
-	let srgb = oklab_to_linear_srgb(oklab.xyz);
-	let rgb = linear_srgb_to_rgb(srgb);
-	return vec4(rgb, oklab.w);
-}
-
-fn oklab_to_linear_srgb(c: vec3<f32>) -> vec3<f32> {
-   let A = mat3x3<f32>(1.0, 0.3963377774, 0.2158037573,
-                       1.0, -0.1055613458, -0.0638541728,
-                       1.0, -0.0894841775, -1.2914855480);
-  	let B = mat3x3<f32>(4.0767416621, -3.3077115913, 0.2309699292,
-                       -1.2684380046, 2.6097574011, -0.3413193965,
-                       -0.0041960863, -0.7034186147, 1.7076147010);
-  	let d = c * A;
-  	return (d * d * d) * B;
-}
-
-
-fn linear_srgb_to_rgb(srgb: vec3<f32>) -> vec3<f32> {
-	return vec3(gamma(srgb.x), gamma(srgb.y), gamma(srgb.z));
-}
-
-fn gamma(x: f32) -> f32 {
-	if x >= 0.0031308 {
-		return 1.055 * pow(x, 1 / 2.4) - 0.055;
-	 }
-	 return 12.92 * x;
+	return vec4(oklab_to_rgb(oklab.xyz), oklab.w);
 }

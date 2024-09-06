@@ -2704,6 +2704,7 @@ version = "0.10.1"
 dependencies = [
  "proc-macro2",
  "quote",
+ "regex",
  "syn 2.0.76",
  "wgsl_to_wgpu",
 ]

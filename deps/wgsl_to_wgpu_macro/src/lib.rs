@@ -1,6 +1,7 @@
+#![cfg_attr(feature = "track_path", feature(track_path))]
+
 extern crate proc_macro;
 use quote::quote;
-use std::str::FromStr;
 use wgsl_to_wgpu::*;
 
 struct ShaderModuleInput {
@@ -26,6 +27,41 @@ impl syn::parse::Parse for ShaderModuleInput {
     }
 }
 
+fn read_to_string(path: impl AsRef<std::path::Path>) -> String {
+    let path = path.as_ref();
+
+    #[cfg(feature = "track_path")]
+    proc_macro::tracked_path::path(path);
+
+    std::fs::read_to_string(path).unwrap()
+}
+
+fn preprocess_wgsl(current_path: impl AsRef<std::path::Path>, original_source: &str) -> String {
+    let current_path = current_path.as_ref();
+    let include_re =
+        regex::Regex::new(r#"//\s*include!\("(?<path>[^"]*)"\)\s*(\n\r?|\r\n?)"#).unwrap();
+    let mut include_sources = Vec::new();
+    include_sources.push("".to_string());
+    for capture in include_re.captures_iter(original_source) {
+        let path_match = capture.name("path").unwrap();
+        let path = path_match.as_str();
+        println!("// include!(\"{path}\")");
+        let include_path = current_path.join(path);
+        let include_source = read_to_string(&include_path);
+        let include_source = preprocess_wgsl(include_path.parent().unwrap(), &include_source);
+        include_sources.push(include_source);
+    }
+    let mut result = String::new();
+    for (include, split) in include_sources
+        .iter()
+        .zip(include_re.split(original_source))
+    {
+        result.push_str(include);
+        result.push_str(split);
+    }
+    result
+}
+
 #[proc_macro]
 pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input: ShaderModuleInput = syn::parse_macro_input!(input);
@@ -39,9 +75,11 @@ pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let wgsl_path: std::path::PathBuf = input.wgsl_path.value().into();
     let visibility = input.visibility;
 
-    let wgsl_source = std::fs::read_to_string(current_path.join(&wgsl_path)).unwrap();
-    let rs_source =
-        create_shader_module(&wgsl_source, &wgsl_path.to_string_lossy(), options).unwrap();
+    let current_wgsl_path = current_path.join(&wgsl_path);
+
+    let wgsl_source = read_to_string(&current_wgsl_path);
+    let wgsl_source = preprocess_wgsl(current_wgsl_path.parent().unwrap(), &wgsl_source);
+    let rs_source = create_shader_module_embedded(&wgsl_source, options).unwrap();
 
     // We're going more work than strictly necessary here because `wgsl_to_wgpu` internally produces a `TokenStream`, but that's not a big concern.
     let rs_source: proc_macro2::TokenStream = rs_source.parse().unwrap();
