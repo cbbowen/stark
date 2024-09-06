@@ -28,7 +28,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	// if !valid_color(srgb) {
 	// 	return vec4(0.0);
 	// }
-	let rgb = linear_srgb_to_rgb(srgb) + dither3(in.clip_position.xy) / 128;
+	let rgb = linear_srgb_to_rgb(srgb) + dither3(in.clip_position.xy) / 128.0;
 	return vec4(rgb, 1.0);
 }
 
