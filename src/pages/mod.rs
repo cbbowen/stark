@@ -15,7 +15,7 @@ pub fn ShaderModulesProvider(children: Children) -> impl IntoView
 
 #[component]
 pub fn Home() -> impl IntoView {
-	let drawing_color = leptos::create_rw_signal(glam::Vec3::ONE);
+	let drawing_color = leptos::create_rw_signal(glam::Vec3::new(0.5, 0.0, 0.0));
 
 	view! {
 		<Title text="Home"/>

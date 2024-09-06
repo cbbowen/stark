@@ -61,9 +61,7 @@ fn create_render_pipeline(
 }
 
 #[component]
-pub fn ColorPicker(
-	color: leptos::RwSignal<glam::Vec3>
-) -> impl IntoView {
+pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 	// Create a lens into `color`.
 	let lightness = create_memo(move |_| color.get().x);
 	let set_lightness = move |l| color.update(|lab| lab.x = l);
@@ -151,20 +149,33 @@ pub fn ColorPicker(
 
 	let pointermove = move |e: leptos::ev::PointerEvent| {
 		if e.buttons() & 1 != 0 || e.pointer_type() != "mouse" {
-			let Some(xy) = e.get_coordinates() else { return };
+			let Some(xy) = e.get_coordinates() else {
+				return;
+			};
 			let ab = (xy - glam::Vec2::new(-0.09, 0.24)) / 3.8;
-			color.update(|lab| { lab.y = ab.x; lab.z = ab.y; });
-			tracing::trace!(color=?color.get(), "ColorPicker::pointermove");
+			color.update(|lab| {
+				lab.y = ab.x;
+				lab.z = ab.y;
+			});
 		}
 	};
 
 	let pointerdown = move |e: leptos::ev::PointerEvent| {
 		e.set_pointer_capture();
-	   e.prevent_default();
+		e.prevent_default();
+		pointermove(e);
 	};
 
 	view! {
 		<div class="ColorPicker">
+			<render_surface::RenderSurface
+				render=render
+				configure=configure
+				on:touchstart=touchstart
+				on:pointermove=pointermove
+				on:pointerdown=pointerdown
+			/>
+			
 			<input
 				type="range"
 				min="0"
@@ -175,12 +186,6 @@ pub fn ColorPicker(
 			/>
 
 			<span>{lightness}</span>
-			<render_surface::RenderSurface
-				render=render
-				configure=configure
-				on:touchstart=touchstart
-				on:pointermove=pointermove
-				on:pointerdown=pointerdown/>
 		</div>
 	}
 }

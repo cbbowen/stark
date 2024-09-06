@@ -1,7 +1,13 @@
 /* Consider switching to `stylers`: https://github.com/abishekatp/stylers. */
 
 body {
-	margin: 0px
+	margin: 0px;
+	background-color: gray;
+}
+
+.Home {
+	display: flex;
+	flex-flow: row nowrap;
 }
 
 .RenderSurface {
@@ -9,6 +15,16 @@ body {
 	aspect-ratio: 1/1;
 }
 
+.Canvas {
+	flex: 4;
+}
+
+.ColorPicker {
+	display: flex;
+	flex-flow: column nowrap;
+	flex: 1;
+}
+
 .ColorPicker > input[type="range"] {
-	width: 100%;
+	/* width: 100%; */
 }
