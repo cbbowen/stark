@@ -125,6 +125,12 @@ impl PointerCapture for leptos::ev::PointerEvent {
 
 pub trait CoordinateSource {
 	fn get_coordinates(&self) -> Option<glam::Vec2>;
+
+	fn get_target_coordinates(&self) -> Option<glam::Vec2> {
+		self
+			.get_coordinates()
+			.map(|c| glam::Vec2::new(2.0, -2.0) * (c - 0.5))
+	}
 }
 
 impl CoordinateSource for leptos::ev::PointerEvent {
@@ -133,11 +139,10 @@ impl CoordinateSource for leptos::ev::PointerEvent {
 			.current_target()
 			.and_then(|target| target.dyn_into::<web_sys::Element>().ok_or_log())?;
 		let (x, y) = (self.offset_x(), self.offset_y());
-		let normalized = glam::Vec2::new(
+		Some(glam::Vec2::new(
 			x as f32 / element.client_width() as f32,
 			y as f32 / element.client_height() as f32,
-		);
-		Some(glam::Vec2::new(2.0, -2.0) * (normalized - 0.5))
+		))
 	}
 }
 

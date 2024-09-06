@@ -6,8 +6,9 @@ use encase::ShaderType;
 use leptos::*;
 use leptos_use::use_element_size;
 use leptos_use::UseElementSizeReturn;
-use util::PointerCapture;
 use std::rc::Rc;
+use util::CoordinateSource;
+use util::PointerCapture;
 use wgpu::util::DeviceExt;
 
 fn canvas_render_pipeline(
@@ -87,7 +88,9 @@ fn create_drawing_action_bind_group(
 	device: &wgpu::Device,
 ) -> (shaders::drawing::bind_groups::BindGroup0, wgpu::Buffer) {
 	use shaders::drawing::bind_groups::*;
-	let contents: Vec<_> = std::iter::repeat(0u8).take(shaders::drawing::DrawingAction::min_size().get() as usize).collect();
+	let contents: Vec<_> = std::iter::repeat(0u8)
+		.take(shaders::drawing::DrawingAction::min_size().get() as usize)
+		.collect();
 	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("drawing_action"),
 		contents: bytemuck::cast_slice(&contents),
@@ -118,7 +121,11 @@ fn create_canvas_bind_groups(
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
 
-	let canvas_to_view = glam::Mat4::from_scale_rotation_translation(2.0 * glam::Vec3::new(1.0, 1.0, 0.0), glam::Quat::IDENTITY, glam::Vec3::new(-1.0, -1.0, 0.0)); 
+	let canvas_to_view = glam::Mat4::from_scale_rotation_translation(
+		2.0 * glam::Vec3::new(1.0, 1.0, 0.0),
+		glam::Quat::IDENTITY,
+		glam::Vec3::new(-1.0, -1.0, 0.0),
+	);
 	let canvas_to_view_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("canvas_to_view"),
 		contents: bytemuck::cast_slice(&[canvas_to_view]),
@@ -183,19 +190,11 @@ fn create_drawing_pipeline(
 }
 
 #[component]
-pub fn Canvas(
-	#[prop(into)]
-	drawing_color: Signal<glam::Vec3>,
-) -> impl IntoView {
+pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView {
 	let context: Rc<WgpuContext> = expect_context();
 	let resources: render::Resources = expect_context();
 
 	let texture_format = wgpu::TextureFormat::Rgba16Float;
-
-	let (drawing_action_bind_group, drawing_action_buffer) =
-		create_drawing_action_bind_group(context.device());
-	let drawing_pipeline =
-		create_drawing_pipeline(context.device(), texture_format, &resources.drawing);
 
 	let canvas_texture_view = create_canvas_texture_view(context.device(), texture_format);
 	let canvas_sampler = create_canvas_sampler(context.device());
@@ -272,12 +271,18 @@ pub fn Canvas(
 		}
 	};
 
+	let (drawing_action_bind_group, drawing_action_buffer) =
+		create_drawing_action_bind_group(context.device());
+	let drawing_pipeline =
+		create_drawing_pipeline(context.device(), texture_format, &resources.drawing);
+
 	let draw = {
 		let context = context.clone();
 		let canvas_texture_view = Rc::new(canvas_texture_view);
 		let drawing_action_bind_group = Rc::new(drawing_action_bind_group);
 		let drawing_action_buffer = Rc::new(drawing_action_buffer);
-		move |x: f32, y: f32, pressure: f32, color: glam::Vec3| {
+		let drawing_pipeline = Rc::new(drawing_pipeline);
+		move |position: glam::Vec2, pressure: f32, color: glam::Vec3| {
 			let drawing_action_bind_group = drawing_action_bind_group.clone();
 			let mut encoder =
 				context
@@ -287,17 +292,17 @@ pub fn Canvas(
 					});
 
 			let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
-			contents.write(&shaders::drawing::DrawingAction {
-				position: glam::Vec2::new(x as f32, y as f32),
-				pressure,
-				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
-				color,
-			}).unwrap();
-			context.queue().write_buffer(
-				&drawing_action_buffer,
-				0,
-				&contents.into_inner(),
-			);
+			contents
+				.write(&shaders::drawing::DrawingAction {
+					position,
+					pressure,
+					seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
+					color,
+				})
+				.unwrap();
+			context
+				.queue()
+				.write_buffer(&drawing_action_buffer, 0, &contents.into_inner());
 
 			{
 				let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -326,33 +331,32 @@ pub fn Canvas(
 		}
 	};
 
-	let render_surface_element = create_node_ref();
-	let UseElementSizeReturn { width, height } = use_element_size(render_surface_element);
-
 	let touchstart = move |e: leptos::ev::TouchEvent| {
 		e.prevent_default();
 	};
 
 	let pointermove = move |e: leptos::ev::PointerEvent| {
-		let width = width.get_untracked() as f32;
-		let height = height.get_untracked() as f32;
-		// tracing::trace!(pointer_type = e.pointer_type(), "pointermove");
-		if e.buttons() & 1 != 0 || e.pointer_type() != "mouse" {
-			let (x, y) = (e.offset_x(), e.offset_y());
+		if e.buttons() & 1 != 0 {
+			let Some(position) = e.get_coordinates() else {
+				return;
+			};
 			let pressure = e.pressure();
-			draw(x as f32 / width, y as f32 / height, pressure, drawing_color.get_untracked());
+			draw(position, pressure, drawing_color.get_untracked());
 		}
 	};
 
-	let pointerdown = move |e: leptos::ev::PointerEvent| {
-		e.set_pointer_capture();
-	   e.prevent_default();
+	let pointerdown = {
+		let pointermove = pointermove.clone();
+		move |e: leptos::ev::PointerEvent| {
+			e.set_pointer_capture();
+			e.prevent_default();
+			pointermove(e);
+		}
 	};
 
 	view! {
 		<div class="Canvas">
 			<RenderSurface
-				node_ref=render_surface_element
 				render=render
 				configure=configure
 				on:touchstart=touchstart
