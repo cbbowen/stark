@@ -33,9 +33,8 @@ pub fn App() -> impl IntoView {
 		<Router>
 			<Routes>
 				// TODO: Figure out best to handle routes. When deployed on Github pages, this will be under /stark, but when testing locally with trunk, it won't.
-				<Route path="/stark/home" view=pages::Home/>
-				// <Route path="/stark/*" view=pages::NotFound/>
-				<Route path="/*" view=|| view! { <Redirect path="/stark/home"/> }/>
+				<Route path="/stark" view=pages::Home/>
+				<Route path="/*" view=|| view! { <Redirect path="/stark"/> }/>
 			</Routes>
 		</Router>
 	}
