@@ -2,13 +2,14 @@ use crate::{shaders::chart::*, util::QueueExt, WgpuContext};
 use encase::{internal::WriteInto, CalculateSizeFor, ShaderType};
 use std::{cell::RefCell, marker::PhantomData, ops::Deref, rc::Rc};
 use wgpu::{BufferAddress, Extent3d};
+use std::pin::Pin;
 
 #[derive(Clone)]
-struct StableVec<Ptr> {
-	vec: RefCell<Vec<Ptr>>,
+struct StableVec<T> {
+	vec: RefCell<Vec<Pin<Box<T>>>>,
 }
 
-impl<Ptr> Default for StableVec<Ptr> {
+impl<T> Default for StableVec<T> {
 	fn default() -> Self {
 		Self {
 			vec: Default::default(),
@@ -16,11 +17,11 @@ impl<Ptr> Default for StableVec<Ptr> {
 	}
 }
 
-impl<Ptr> StableVec<Ptr> {
-	pub fn push(&self, ptr: impl Into<Ptr>) -> usize {
+impl<T> StableVec<T> {
+	pub fn push(&self, value: T) -> usize {
 		let mut vec = self.vec.borrow_mut();
 		let index = vec.len();
-		vec.push(ptr.into());
+		vec.push(Box::pin(value));
 		index
 	}
 
@@ -29,19 +30,11 @@ impl<Ptr> StableVec<Ptr> {
 	}
 }
 
-impl<Ptr: Clone> StableVec<Ptr> {
-	pub fn get_ptr(&self, index: usize) -> Ptr {
-		let vec = self.vec.borrow();
-		let p = &vec[index];
-		p.clone()
-	}
-}
-
-impl<Ptr: Deref> std::ops::Index<usize> for StableVec<Ptr> {
-	type Output = Ptr::Target;
+impl<T> std::ops::Index<usize> for StableVec<T> {
+	type Output = T;
 	fn index(&self, index: usize) -> &Self::Output {
 		let vec = self.vec.borrow();
-		let r: &Ptr::Target = vec[index].deref();
+		let r: &T = vec[index].deref();
 		// SAFETY: `r` remains pinned for the lifetime of `self`.
 		unsafe { std::mem::transmute(r) }
 	}
@@ -133,7 +126,7 @@ impl FreeList {
 
 struct PoolInternal<Data> {
 	context: Rc<WgpuContext>,
-	blocks: StableVec<Rc<Block>>,
+	blocks: StableVec<Block>,
 	free_list: FreeList,
 	texture_layer_descriptor: TextureLayerDescriptor,
 	_data: PhantomData<*const Data>,
