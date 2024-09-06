@@ -31,7 +31,7 @@ fn read_to_string(path: impl AsRef<std::path::Path>) -> String {
     let path = path.as_ref();
 
     #[cfg(feature = "track_path")]
-    proc_macro::tracked_path::path(path);
+    proc_macro::tracked_path::path(path.to_string_lossy());
 
     std::fs::read_to_string(path).unwrap()
 }
