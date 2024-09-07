@@ -57,13 +57,10 @@ pub type ConfigureArgs = (WgpuSurface, u32, u32);
 /// Callback type which determines the surface configuration.
 pub type ConfigureCallback = TryCallback<ConfigureArgs, Option<wgpu::SurfaceConfiguration>>;
 
-/// Callback type which renders to a texture view.
-pub type RenderCallback = TryCallback<wgpu::TextureView>;
-
 #[component]
 pub fn RenderSurface(
 	#[prop(optional, into)] node_ref: Option<NodeRef<leptos::html::Canvas>>,
-	#[prop(into)] render: MaybeSignal<RenderCallback>,
+	#[prop(into)] render: CallbackSignal<wgpu::TextureView>,
 	#[prop(optional, into)] configure: Option<ConfigureCallback>,
 	#[prop(optional, into)] configured: Option<TryCallback<wgpu::SurfaceConfiguration>>,
 	#[prop(optional, into)] resized: Option<TryCallback<(u32, u32)>>,
@@ -150,12 +147,8 @@ pub fn RenderSurface(
 
 	// This must not attempt to track signals because it will only be called conditionally. Anything
 	// that should be tracked should instead be an argument.
-	let try_render = move |args: (
-		Option<Result<WgpuSurface, RenderSurfaceError>>,
-		RenderCallback,
-		bool,
-	)| {
-		let (surface, render, needs_reconfigure) = args;
+	let try_render = move |args: (Option<Result<WgpuSurface, RenderSurfaceError>>, bool)| {
+		let (surface, needs_reconfigure) = args;
 		let Some(Ok(surface)) = surface else {
 			return;
 		};
@@ -201,11 +194,20 @@ pub fn RenderSurface(
 		let view = surface_texture
 			.texture
 			.create_view(&wgpu::TextureViewDescriptor::default());
-		render.call(view);
+		render.try_call_untracked(view);
 		surface_texture.present();
 	};
 	let try_render = use_animation_frame_throttle_with_arg(try_render);
-	let try_render = move || try_render((surface.get(), render.get(), needs_reconfigure.get()));
+	let try_render = move || {
+		// What is going on here?
+		// Intuitively, `render.get()` should be passed to `try_render` below. However, `try_render` may
+		// invoke the `configured` callback causing changes the `render` signal. The callback would then
+		// be out-of-date which is a problem if it affects pipeline compatibility. This fix is, however,
+		// a hack. I need to rethink the API a bit.
+		render.track();
+
+		try_render((surface.get(), needs_reconfigure.get()))
+	};
 
 	// Render as an effect.
 	create_effect(move |_| try_render());

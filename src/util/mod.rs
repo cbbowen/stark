@@ -17,8 +17,8 @@ use leptos::*;
 mod result_ext;
 pub use result_ext::*;
 
-mod try_callback;
-pub use try_callback::*;
+mod callback;
+pub use callback::*;
 
 mod once;
 pub use once::*;

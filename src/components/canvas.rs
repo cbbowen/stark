@@ -6,9 +6,9 @@ use encase::ShaderType;
 use glam::Vec4Swizzles;
 use leptos::*;
 use std::rc::Rc;
+use util::CallbackSignal;
 use util::CoordinateSource;
 use util::PointerCapture;
-use util::TryCallback;
 use wgpu::util::DeviceExt;
 
 fn canvas_render_pipeline(
@@ -226,20 +226,15 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		let canvas_bind_group0 = Rc::new(canvas_bind_group0);
 		let canvas_bind_group1 = Rc::new(canvas_bind_group1);
 		let canvas_to_view_buffer = Rc::new(canvas_to_view_buffer);
-		create_derived(move || {
+		CallbackSignal::new(move || {
 			let context = context.clone();
 			redraw_trigger.track();
 			let canvas_bind_group0 = canvas_bind_group0.clone();
 			let canvas_bind_group1 = canvas_bind_group1.clone();
 			let canvas_to_view_buffer = canvas_to_view_buffer.clone();
-			// Replacing this `get_untracked` with `get` reproduces the bug. But in the
-			// unlikely event the texture format changes, it would be nice to re-run this. I
-			// think what's going on is that the `StoredValue` for the returned callback is
-			// getting disposed while the render surface still needs it but before a new one
-			// is available.
-			let render_pipeline = render_pipeline.get_untracked();
+			let render_pipeline = render_pipeline.get();
 			let canvas_to_view = canvas_to_view.get();
-			TryCallback::new(move |view: wgpu::TextureView| {
+			move |view: wgpu::TextureView| {
 				let Some(render_pipeline) = render_pipeline.clone() else {
 					return;
 				};
@@ -284,7 +279,7 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 					render_pass.draw(0..4, 0..1);
 				}
 				context.queue().submit([encoder.finish()]);
-			})
+			}
 		})
 	};
 

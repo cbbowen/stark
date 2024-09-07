@@ -87,19 +87,18 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 	let render = {
 		let context = context.clone();
 		let bind_group = Rc::new(bind_group);
-		create_derived(move || {
+		CallbackSignal::new(move || {
 			let context = context.clone();
 			let bind_group = bind_group.clone();
-			let Some(render_pipeline) = render_pipeline.get() else {
-				return TryCallback::new(|_view| ());
-			};
+			let render_pipeline = render_pipeline.get();
 
 			let lightness = lightness.get();
 			context
 				.queue()
 				.write_buffer(&buffer, 0, bytemuck::cast_slice(&[lightness as f32]));
 
-			TryCallback::new(move |view: wgpu::TextureView| {
+			move |view: wgpu::TextureView| {
+				let Some(render_pipeline) = render_pipeline.as_ref() else { return };
 				let mut encoder =
 					context
 						.device()
@@ -126,7 +125,7 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 					render_pass.draw(0..4, 0..1);
 				}
 				context.queue().submit([encoder.finish()]);
-			})
+			}
 		})
 	};
 

@@ -1,4 +1,9 @@
 use std::fmt::Debug;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+#[error("{0}")]
+struct OptionNoneError<'a>(&'a str);
 
 pub trait ResultExt<T, E> {
 	fn ok_or_log(self) -> Option<T>
@@ -26,9 +31,6 @@ impl<T> OptionExt<T> for Option<T> {
 	where
 		T: Default,
 	{
-		self.unwrap_or_else(|| {
-			tracing::error!("{error}");
-			T::default()
-		})
+		self.ok_or(OptionNoneError(error)).ok_or_log().unwrap_or_default()
 	}
 }
