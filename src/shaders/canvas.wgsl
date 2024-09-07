@@ -1,4 +1,4 @@
-// include!("oklab.wgsl")
+include!("oklab.wgsl") {}
 
 @group(0) @binding(0)
 var<uniform> chart_to_canvas: mat4x4<f32>;

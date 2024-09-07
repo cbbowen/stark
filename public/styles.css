@@ -2,7 +2,7 @@
 
 body {
 	margin: 0px;
-	background-color: gray;
+	background-color: rgb(64, 64, 64);
 }
 
 .Home {
@@ -25,6 +25,23 @@ body {
 	flex: 1;
 }
 
-.ColorPicker > input[type="range"] {
-	/* width: 100%; */
+.ColorPicker>input[type="range"] {
+	overflow: hidden;
+	-webkit-appearance: none;
+	
+	background-image: linear-gradient(to right, black, white);
+}
+
+.ColorPicker>input[type='range']::-webkit-slider-runnable-track {
+	-webkit-appearance: none;
+}
+
+.ColorPicker>input[type='range']::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	cursor: ew-resize;
+
+	width: 8px;
+	height: 16px;
+	background: white;
+	box-shadow: 0px 0px 8px 0px black;
 }

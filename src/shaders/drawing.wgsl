@@ -1,4 +1,4 @@
-// include!("dither.wgsl")
+include!("dither.wgsl") {}
 
 struct DrawingAction {
    position: vec2<f32>,

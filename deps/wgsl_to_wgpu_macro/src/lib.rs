@@ -39,13 +39,13 @@ fn read_to_string(path: impl AsRef<std::path::Path>) -> String {
 fn preprocess_wgsl(current_path: impl AsRef<std::path::Path>, original_source: &str) -> String {
     let current_path = current_path.as_ref();
     let include_re =
-        regex::Regex::new(r#"//\s*include!\("(?<path>[^"]*)"\)\s*(\n\r?|\r\n?)"#).unwrap();
+        regex::Regex::new(r#"\<include!\("(?<path>[^"]*)"\)\s*\{\s*\}"#).unwrap();
     let mut include_sources = Vec::new();
     include_sources.push("".to_string());
     for capture in include_re.captures_iter(original_source) {
         let path_match = capture.name("path").unwrap();
         let path = path_match.as_str();
-        println!("// include!(\"{path}\")");
+        println!("include!(\"{path}\")");
         let include_path = current_path.join(path);
         let include_source = read_to_string(&include_path);
         let include_source = preprocess_wgsl(include_path.parent().unwrap(), &include_source);

@@ -186,8 +186,8 @@ where
 		let bind_group = BindGroup::from_bindings(
 			device,
 			BindGroupLayout {
-				chart_texture: &texture_view,
-				chart_data: data_buffer.as_entire_buffer_binding(),
+				tile_texture: &texture_view,
+				tile_data: data_buffer.as_entire_buffer_binding(),
 			},
 		);
 

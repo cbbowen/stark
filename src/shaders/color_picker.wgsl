@@ -1,5 +1,5 @@
-// include!("oklab.wgsl")
-// include!("dither.wgsl")
+include!("oklab.wgsl") {}
+include!("dither.wgsl") {}
 
 @group(0) @binding(0)
 var<uniform> lightness: f32;

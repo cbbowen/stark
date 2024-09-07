@@ -331,6 +331,22 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		}
 	};
 
+	let keys = leptos::store_value(std::collections::HashSet::new());
+	let keydown = move |e: leptos::ev::KeyboardEvent| {
+		keys.update_value(|keys| {
+			if !keys.insert(e.key_code()) {
+				tracing::warn!(key = e.key(), "key already down");
+			}
+		});
+	};
+	let keyup = move |e: leptos::ev::KeyboardEvent| {
+		keys.update_value(|keys| {
+			if !keys.remove(&e.key_code()) {
+				tracing::warn!(key = e.key(), "key not down");
+			}
+		});
+	};
+
 	let touchstart = move |e: leptos::ev::TouchEvent| {
 		e.prevent_default();
 	};
@@ -362,6 +378,8 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 				on:touchstart=touchstart
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
+				on:keydown=keydown
+				on:keyup=keyup
 			/>
 		</div>
 	}
