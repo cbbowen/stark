@@ -74,13 +74,11 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 	let render_pipeline = {
 		let context = context.clone();
 		create_derived(move || {
-			texture_format.get().map(|f| {
-				Rc::new(create_render_pipeline(
-					context.device(),
-					f,
-					&resources.color_picker,
-				))
-			})
+			Some(Rc::new(create_render_pipeline(
+				context.device(),
+				texture_format.get()?,
+				&resources.color_picker,
+			)))
 		})
 	};
 
@@ -93,7 +91,7 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 			let context = context.clone();
 			let bind_group = bind_group.clone();
 			let Some(render_pipeline) = render_pipeline.get() else {
-				return leptos::Callback::new(|_view| ());
+				return TryCallback::new(|_view| ());
 			};
 
 			let lightness = lightness.get();
@@ -101,7 +99,7 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 				.queue()
 				.write_buffer(&buffer, 0, bytemuck::cast_slice(&[lightness as f32]));
 
-			leptos::Callback::new(move |view: wgpu::TextureView| {
+			TryCallback::new(move |view: wgpu::TextureView| {
 				let mut encoder =
 					context
 						.device()
@@ -132,17 +130,6 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 		})
 	};
 
-	let configure = {
-		let context = context.clone();
-		move |args: render_surface::ConfigureArgs| {
-			let (surface, width, height) = args;
-			let config = surface.get_default_config(context.adapter(), width, height);
-			tracing::info!(?config, "ColorPicker::configure");
-			set_texture_format.set(config.as_ref().map(|c| c.format));
-			config
-		}
-	};
-
 	let touchstart = move |e: leptos::ev::TouchEvent| {
 		e.prevent_default();
 	};
@@ -166,15 +153,19 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 		pointermove(e);
 	};
 
+	let configured = move |configuration: wgpu::SurfaceConfiguration| {
+		set_texture_format.set(Some(configuration.format));
+	};
+
 	view! {
 		<div class="ColorPicker">
 			<render_surface::RenderSurface
 				render=render
-				configure=configure
+				configured=configured
 				on:touchstart=touchstart
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
-			/>
+			></render_surface::RenderSurface>
 
 			<input
 				type="range"

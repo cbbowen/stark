@@ -1,8 +1,8 @@
-use crate::*;
 use crate::util::*;
-use std::rc::Rc;
+use crate::*;
 use leptos::*;
 use leptos_use::{use_debounce_fn, use_throttle_fn_with_arg};
+use std::rc::Rc;
 use std::{fmt::Debug, ops::Deref};
 use tracing::error;
 use wasm_bindgen::JsCast;
@@ -55,20 +55,19 @@ fn create_surface(
 pub type ConfigureArgs = (WgpuSurface, u32, u32);
 
 /// Callback type which determines the surface configuration.
-pub type ConfigureCallback = Callback<ConfigureArgs, Option<wgpu::SurfaceConfiguration>>;
+pub type ConfigureCallback = TryCallback<ConfigureArgs, Option<wgpu::SurfaceConfiguration>>;
 
 /// Callback type which renders to a texture view.
-pub type RenderCallback = leptos::Callback<wgpu::TextureView>;
+pub type RenderCallback = TryCallback<wgpu::TextureView>;
 
 #[component]
 pub fn RenderSurface(
 	#[prop(optional, into)] node_ref: Option<NodeRef<leptos::html::Canvas>>,
 	#[prop(into)] render: MaybeSignal<RenderCallback>,
 	#[prop(optional, into)] configure: Option<ConfigureCallback>,
-	#[prop(optional, into)] configured: Option<Callback<wgpu::SurfaceConfiguration>>,
-	#[prop(optional, into)] resized: Option<Callback<(u32, u32)>>,
+	#[prop(optional, into)] configured: Option<TryCallback<wgpu::SurfaceConfiguration>>,
+	#[prop(optional, into)] resized: Option<TryCallback<(u32, u32)>>,
 	#[prop(default = 250.0, into)] min_configure_interval: f64,
-	#[prop(default = 30.0, into)] min_render_interval: f64,
 ) -> impl IntoView {
 	let context: Rc<WgpuContext> = expect_context();
 
@@ -205,7 +204,7 @@ pub fn RenderSurface(
 		render.call(view);
 		surface_texture.present();
 	};
-	let try_render = use_throttle_fn_with_arg(try_render, min_render_interval);
+	let try_render = use_animation_frame_throttle_with_arg(try_render);
 	let try_render = move || try_render((surface.get(), render.get(), needs_reconfigure.get()));
 
 	// Render as an effect.

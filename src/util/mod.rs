@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use leptos::*;
 
 // mod distinct;
@@ -14,6 +16,9 @@ use leptos::*;
 
 mod result_ext;
 pub use result_ext::*;
+
+mod try_callback;
+pub use try_callback::*;
 
 mod once;
 pub use once::*;
@@ -202,4 +207,50 @@ impl QueueExt for wgpu::Queue {
 			},
 		)
 	}
+}
+
+fn animation_frame_throttle_filter<R>() -> impl Fn(std::rc::Rc<dyn Fn() -> R>) -> std::rc::Rc<std::cell::RefCell<Option<R>>> + Clone {
+	let is_available = std::rc::Rc::new(std::cell::Cell::new(true));
+	let last_return_value: std::rc::Rc<std::cell::RefCell<Option<R>>> = Default::default();
+
+	move |invoke: std::rc::Rc<dyn Fn() -> R>| {
+		let last_return_value = last_return_value.clone();
+		let is_available = is_available.clone();
+		if is_available.take() {
+			#[cfg(debug_assertions)]
+			let prev = SpecialNonReactiveZone::enter();
+
+			let return_value = invoke();
+
+			#[cfg(debug_assertions)]
+			SpecialNonReactiveZone::exit(prev);
+
+			last_return_value.replace(Some(return_value));
+
+			leptos::request_animation_frame(move || is_available.set(true));
+		}
+
+		return last_return_value;
+	}
+}
+
+pub fn use_animation_frame_throttle<F, R>(
+	func: F,
+) -> impl Fn() -> std::rc::Rc<std::cell::RefCell<Option<R>>> + Clone
+where
+	F: Fn() -> R + Clone + 'static,
+	R: 'static,
+{
+	leptos_use::utils::create_filter_wrapper(std::rc::Rc::new(animation_frame_throttle_filter()), func)
+}
+
+pub fn use_animation_frame_throttle_with_arg<F, Arg, R>(
+	func: F,
+) -> impl Fn(Arg) -> std::rc::Rc<std::cell::RefCell<Option<R>>> + Clone
+where
+	F: Fn(Arg) -> R + Clone + 'static,
+	Arg: Clone + 'static,
+	R: 'static,
+{
+	leptos_use::utils::create_filter_wrapper_with_arg(std::rc::Rc::new(animation_frame_throttle_filter()), func)
 }

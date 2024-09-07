@@ -5,11 +5,10 @@ use crate::*;
 use encase::ShaderType;
 use glam::Vec4Swizzles;
 use leptos::*;
-use leptos_use::use_element_size;
-use leptos_use::UseElementSizeReturn;
 use std::rc::Rc;
 use util::CoordinateSource;
 use util::PointerCapture;
+use util::TryCallback;
 use wgpu::util::DeviceExt;
 
 fn canvas_render_pipeline(
@@ -192,14 +191,25 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 	let context: Rc<WgpuContext> = expect_context();
 	let resources: render::Resources = expect_context();
 
-	let texture_format = wgpu::TextureFormat::Rgba16Float;
-
-	let canvas_texture_view = create_canvas_texture_view(context.device(), texture_format);
 	let canvas_sampler = create_canvas_sampler(context.device());
+
+	let canvas_texture_format = wgpu::TextureFormat::Rgba16Float;
+	let (surface_texture_format, set_surface_texture_format) = create_signal(None);
+
+	let canvas_texture_view = create_canvas_texture_view(context.device(), canvas_texture_format);
 	let (canvas_bind_group0, canvas_bind_group1, canvas_to_view_buffer) =
 		create_canvas_bind_groups(context.device(), &canvas_texture_view, &canvas_sampler);
-	let render_pipeline =
-		canvas_render_pipeline(context.device(), texture_format, &resources.canvas);
+
+	let render_pipeline = {
+		let context = context.clone();
+		create_derived(move || {
+			Some(Rc::new(canvas_render_pipeline(
+				context.device(),
+				surface_texture_format.get()?,
+				&resources.canvas,
+			)))
+		})
+	};
 
 	let canvas_to_view = leptos::create_rw_signal(glam::Mat4::from_scale_rotation_translation(
 		glam::Vec3::new(2.0, 2.0, 1.0),
@@ -216,16 +226,24 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		let canvas_bind_group0 = Rc::new(canvas_bind_group0);
 		let canvas_bind_group1 = Rc::new(canvas_bind_group1);
 		let canvas_to_view_buffer = Rc::new(canvas_to_view_buffer);
-		let render_pipeline = Rc::new(render_pipeline);
 		create_derived(move || {
 			let context = context.clone();
 			redraw_trigger.track();
 			let canvas_bind_group0 = canvas_bind_group0.clone();
 			let canvas_bind_group1 = canvas_bind_group1.clone();
 			let canvas_to_view_buffer = canvas_to_view_buffer.clone();
-			let render_pipeline = render_pipeline.clone();
+			// Replacing this `get_untracked` with `get` reproduces the bug. But in the
+			// unlikely event the texture format changes, it would be nice to re-run this. I
+			// think what's going on is that the `StoredValue` for the returned callback is
+			// getting disposed while the render surface still needs it but before a new one
+			// is available.
+			let render_pipeline = render_pipeline.get_untracked();
 			let canvas_to_view = canvas_to_view.get();
-			leptos::Callback::new(move |view: wgpu::TextureView| {
+			TryCallback::new(move |view: wgpu::TextureView| {
+				let Some(render_pipeline) = render_pipeline.clone() else {
+					return;
+				};
+
 				context.queue().write_buffer(
 					&canvas_to_view_buffer,
 					0,
@@ -263,7 +281,6 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 					render_pass.set_pipeline(&render_pipeline);
 					canvas_bind_group0.set(&mut render_pass);
 					canvas_bind_group1.set(&mut render_pass);
-					// TODO: Pass in uniforms for the camera.
 					render_pass.draw(0..4, 0..1);
 				}
 				context.queue().submit([encoder.finish()]);
@@ -271,23 +288,10 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		})
 	};
 
-	let configure = {
-		let context = context.clone();
-		move |args: render_surface::ConfigureArgs| {
-			tracing::info!("Canvas::configure");
-			let (surface, width, height) = args;
-			let default = surface.get_default_config(context.adapter(), width, height)?;
-			Some(wgpu::SurfaceConfiguration {
-				format: texture_format,
-				..default
-			})
-		}
-	};
-
 	let (drawing_action_bind_group, drawing_action_buffer) =
 		create_drawing_action_bind_group(context.device());
 	let drawing_pipeline =
-		create_drawing_pipeline(context.device(), texture_format, &resources.drawing);
+		create_drawing_pipeline(context.device(), canvas_texture_format, &resources.drawing);
 
 	let draw = {
 		let context = context.clone();
@@ -388,11 +392,16 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		}
 	};
 
+
+	let configured = move |configuration: wgpu::SurfaceConfiguration| {
+		set_surface_texture_format.try_set(Some(configuration.format));
+	};
+
 	view! {
 		<div class="Canvas">
 			<RenderSurface
 				render=render
-				configure=configure
+				configured=configured
 				on:touchstart=touchstart
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
