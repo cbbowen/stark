@@ -24,10 +24,11 @@ fn vs_main(
 ) -> VertexOutput {
     var out: VertexOutput;
     let x = 2.0 * f32(in.vertex_index & 1u) - 1.0;
-    let y = f32(in.vertex_index & 2u) - 1.0;
+    let y = 1.0 - f32(in.vertex_index & 2u);
     let size = action.pressure;
-    let pos = (2.0 * action.position - 1.0) + size * 0.5 * vec2(x, y);
-    out.clip_position = vec4(pos.x, pos.y, 0.0, 1.0);
+    let pos = action.position + size * 0.5 * vec2(x, y);
+
+	 out.clip_position = vec4(vec2(2.0, -2.0) * (pos - 0.5), 0.0, 1.0);
     out.tex_coords = vec2(x, y);
     return out;
 }

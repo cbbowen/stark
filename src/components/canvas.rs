@@ -3,6 +3,7 @@ use crate::render;
 use crate::util::create_derived;
 use crate::*;
 use encase::ShaderType;
+use glam::Vec4Swizzles;
 use leptos::*;
 use leptos_use::use_element_size;
 use leptos_use::UseElementSizeReturn;
@@ -112,6 +113,7 @@ fn create_canvas_bind_groups(
 ) -> (
 	shaders::canvas::bind_groups::BindGroup0,
 	shaders::canvas::bind_groups::BindGroup1,
+	wgpu::Buffer,
 ) {
 	use shaders::canvas::bind_groups::*;
 
@@ -121,14 +123,9 @@ fn create_canvas_bind_groups(
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
 
-	let canvas_to_view = glam::Mat4::from_scale_rotation_translation(
-		2.0 * glam::Vec3::new(1.0, 1.0, 0.0),
-		glam::Quat::IDENTITY,
-		glam::Vec3::new(-1.0, -1.0, 0.0),
-	);
 	let canvas_to_view_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
 		label: Some("canvas_to_view"),
-		contents: bytemuck::cast_slice(&[canvas_to_view]),
+		contents: bytemuck::cast_slice(&[glam::Mat4::ZERO]),
 		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
 	});
 
@@ -147,6 +144,7 @@ fn create_canvas_bind_groups(
 				canvas_to_view: canvas_to_view_buffer.as_entire_buffer_binding(),
 			},
 		),
+		canvas_to_view_buffer,
 	)
 }
 
@@ -198,10 +196,16 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 
 	let canvas_texture_view = create_canvas_texture_view(context.device(), texture_format);
 	let canvas_sampler = create_canvas_sampler(context.device());
-	let (canvas_bind_group0, canvas_bind_group1) =
+	let (canvas_bind_group0, canvas_bind_group1, canvas_to_view_buffer) =
 		create_canvas_bind_groups(context.device(), &canvas_texture_view, &canvas_sampler);
 	let render_pipeline =
 		canvas_render_pipeline(context.device(), texture_format, &resources.canvas);
+
+	let canvas_to_view = leptos::create_rw_signal(glam::Mat4::from_scale_rotation_translation(
+		glam::Vec3::new(2.0, 2.0, 1.0),
+		glam::Quat::IDENTITY,
+		glam::Vec3::new(-1.0, -1.0, 0.0),
+	));
 
 	let redraw_trigger = create_trigger();
 	// let interval = std::time::Duration::from_millis(1000);
@@ -211,14 +215,23 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		let context = context.clone();
 		let canvas_bind_group0 = Rc::new(canvas_bind_group0);
 		let canvas_bind_group1 = Rc::new(canvas_bind_group1);
+		let canvas_to_view_buffer = Rc::new(canvas_to_view_buffer);
 		let render_pipeline = Rc::new(render_pipeline);
 		create_derived(move || {
 			let context = context.clone();
 			redraw_trigger.track();
 			let canvas_bind_group0 = canvas_bind_group0.clone();
 			let canvas_bind_group1 = canvas_bind_group1.clone();
+			let canvas_to_view_buffer = canvas_to_view_buffer.clone();
 			let render_pipeline = render_pipeline.clone();
+			let canvas_to_view = canvas_to_view.get();
 			leptos::Callback::new(move |view: wgpu::TextureView| {
+				context.queue().write_buffer(
+					&canvas_to_view_buffer,
+					0,
+					bytemuck::cast_slice(&[canvas_to_view]),
+				);
+
 				let mut encoder =
 					context
 						.device()
@@ -331,34 +344,39 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		}
 	};
 
-	let keys = leptos::store_value(std::collections::HashSet::new());
-	let keydown = move |e: leptos::ev::KeyboardEvent| {
-		keys.update_value(|keys| {
-			if !keys.insert(e.key_code()) {
-				tracing::warn!(key = e.key(), "key already down");
-			}
-		});
-	};
-	let keyup = move |e: leptos::ev::KeyboardEvent| {
-		keys.update_value(|keys| {
-			if !keys.remove(&e.key_code()) {
-				tracing::warn!(key = e.key(), "key not down");
-			}
-		});
-	};
-
 	let touchstart = move |e: leptos::ev::TouchEvent| {
 		e.prevent_default();
 	};
 
+	let keys: KeyboardState = expect_context();
+
 	let pointermove = move |e: leptos::ev::PointerEvent| {
-		if e.buttons() & 1 != 0 {
-			let Some(position) = e.get_coordinates() else {
-				return;
-			};
-			let pressure = e.pressure();
-			draw(position, pressure, drawing_color.get_untracked());
+		if e.buttons() & 1 == 0 {
+			return;
 		}
+
+		// Pan.
+		if keys.is_pressed(" ") {
+			if let Some(movement) = e.target_movement() {
+				canvas_to_view.update(|mat| {
+					*mat = glam::Mat4::from_translation(glam::vec3(movement.x, movement.y, 0.0)) * *mat;
+				})
+			}
+			return;
+		}
+
+		// Draw.
+		if let Some(position) = e.target_position() {
+			let pressure = e.pressure();
+			let canvas_to_view = canvas_to_view.get();
+			let view_to_canvas = canvas_to_view.inverse();
+			let canvas_position = view_to_canvas * glam::vec4(position.x, position.y, 0.0, 1.0);
+			draw(
+				canvas_position.xy(),
+				pressure,
+				drawing_color.get_untracked(),
+			);
+		};
 	};
 
 	let pointerdown = {
@@ -378,8 +396,6 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 				on:touchstart=touchstart
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
-				on:keydown=keydown
-				on:keyup=keyup
 			/>
 		</div>
 	}

@@ -149,7 +149,7 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 
 	let pointermove = move |e: leptos::ev::PointerEvent| {
 		if e.buttons() & 1 != 0 {
-			let Some(xy) = e.get_target_coordinates() else {
+			let Some(xy) = e.target_position() else {
 				return;
 			};
 			let ab = (xy - glam::Vec2::new(-0.09, 0.24)) / 3.8;

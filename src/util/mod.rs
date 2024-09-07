@@ -124,25 +124,47 @@ impl PointerCapture for leptos::ev::PointerEvent {
 }
 
 pub trait CoordinateSource {
-	fn get_coordinates(&self) -> Option<glam::Vec2>;
+	fn size(&self) -> Option<glam::Vec2>;
 
-	fn get_target_coordinates(&self) -> Option<glam::Vec2> {
+	fn pixel_position(&self) -> glam::Vec2;
+
+	fn pixel_movement(&self) -> glam::Vec2;
+
+	fn position(&self) -> Option<glam::Vec2> {
+		self.size().map(|size| self.pixel_position() / size)
+	}
+
+	fn target_position(&self) -> Option<glam::Vec2> {
 		self
-			.get_coordinates()
-			.map(|c| glam::Vec2::new(2.0, -2.0) * (c - 0.5))
+			.position()
+			.map(|c| glam::vec2(2.0, -2.0) * (c - 0.5))
+	}
+
+	fn movement(&self) -> Option<glam::Vec2> {
+		self.size().map(|size| self.pixel_movement() / size)
+	}
+
+	fn target_movement(&self) -> Option<glam::Vec2> {
+		self
+			.movement()
+			.map(|c| glam::vec2(2.0, -2.0) * c)
 	}
 }
 
 impl CoordinateSource for leptos::ev::PointerEvent {
-	fn get_coordinates(&self) -> Option<glam::Vec2> {
+	fn size(&self) -> Option<glam::Vec2> {
 		let element = self
 			.current_target()
 			.and_then(|target| target.dyn_into::<web_sys::Element>().ok_or_log())?;
-		let (x, y) = (self.offset_x(), self.offset_y());
-		Some(glam::Vec2::new(
-			x as f32 / element.client_width() as f32,
-			y as f32 / element.client_height() as f32,
-		))
+		Some(glam::vec2(element.client_width() as f32, element.client_height() as f32))
+	}
+
+	fn pixel_position(&self) -> glam::Vec2 {
+		glam::vec2(self.offset_x() as f32, self.offset_y() as f32)
+	}
+
+	fn pixel_movement(&self) -> glam::Vec2 {
+		glam::vec2(self.movement_x() as f32, self.movement_y() as f32)
 	}
 }
 

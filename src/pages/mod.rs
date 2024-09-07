@@ -19,20 +19,22 @@ pub fn Home() -> impl IntoView {
 
 	view! {
 		<Title text="Home"/>
-		<RenderContextProvider
-			initializing_fallback=|| {
-				view! { <fallback::Initializing /> }
-			}
-			error_fallback=|errors| {
-				view! { <fallback::ErrorList errors></fallback::ErrorList> }
-			}>
-			<ShaderModulesProvider>
-				<div class="Home">
-					<Canvas drawing_color=drawing_color/>
-					<ColorPicker color=drawing_color/>
-				</div>
-			</ShaderModulesProvider>
-		</RenderContextProvider>
+		<KeyboardStateProvider>
+			<RenderContextProvider
+				initializing_fallback=|| {
+					view! { <fallback::Initializing /> }
+				}
+				error_fallback=|errors| {
+					view! { <fallback::ErrorList errors></fallback::ErrorList> }
+				}>
+				<ShaderModulesProvider>
+					<div class="Home">
+						<Canvas drawing_color=drawing_color/>
+						<ColorPicker color=drawing_color/>
+					</div>
+				</ShaderModulesProvider>
+			</RenderContextProvider>
+		</KeyboardStateProvider>
 	}
 }
 
