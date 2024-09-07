@@ -1,11 +1,10 @@
 use crate::components::*;
+use crate::*;
 use leptos::*;
 use leptos_meta::*;
-use crate::*;
 
 #[component]
-pub fn ShaderModulesProvider(children: Children) -> impl IntoView
-{
+pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
 	run_as_child(move || {
 		let context: std::rc::Rc<WgpuContext> = expect_context();
 		provide_context(render::Resources::new(context.device()));

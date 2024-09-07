@@ -1,8 +1,8 @@
 use crate::{shaders::chart::*, util::QueueExt, WgpuContext};
 use encase::{internal::WriteInto, CalculateSizeFor, ShaderType};
+use std::pin::Pin;
 use std::{cell::RefCell, marker::PhantomData, ops::Deref, rc::Rc};
 use wgpu::{BufferAddress, Extent3d};
-use std::pin::Pin;
 
 #[derive(Clone)]
 struct StableVec<T> {
@@ -256,11 +256,12 @@ where
 	[Data]: CalculateSizeFor,
 {
 	fn get_buffer_offset(&self) -> BufferAddress {
-		// `calculate_size_for` has surprising semantics for zero-length arrays, so we have to special-case the zero index.
+		// `calculate_size_for` has surprising semantics for zero-length arrays, so we have to
+		// special-case the zero index.
 		let layer_index = self.index.layer_index;
 		if layer_index == 0 {
 			0
-		} else {		
+		} else {
 			<[Data]>::calculate_size_for(self.index.layer_index as u64).get()
 		}
 	}

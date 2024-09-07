@@ -39,8 +39,9 @@ impl WgpuContext {
 		let (device, queue) = adapter
 			.request_device(
 				&wgpu::DeviceDescriptor {
-					required_features: wgpu::Features::default() | wgpu::Features::INDIRECT_FIRST_INSTANCE |
-						wgpu::Features::MULTIVIEW,
+					required_features: wgpu::Features::default()
+						| wgpu::Features::INDIRECT_FIRST_INSTANCE
+						| wgpu::Features::MULTIVIEW,
 					..Default::default()
 				},
 				None,

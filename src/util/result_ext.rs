@@ -16,14 +16,19 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
 }
 
 pub trait OptionExt<T> {
-	fn unwrap_or_default_and_log(self, error: &str) -> T where T: Default;
+	fn unwrap_or_default_and_log(self, error: &str) -> T
+	where
+		T: Default;
 }
 
 impl<T> OptionExt<T> for Option<T> {
-	fn unwrap_or_default_and_log(self, error: &str) -> T where T: Default {
-		 self.unwrap_or_else(|| {
+	fn unwrap_or_default_and_log(self, error: &str) -> T
+	where
+		T: Default,
+	{
+		self.unwrap_or_else(|| {
 			tracing::error!("{error}");
 			T::default()
-		 })
+		})
 	}
 }

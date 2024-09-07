@@ -140,9 +140,7 @@ pub trait CoordinateSource {
 	}
 
 	fn target_position(&self) -> Option<glam::Vec2> {
-		self
-			.position()
-			.map(|c| glam::vec2(2.0, -2.0) * (c - 0.5))
+		self.position().map(|c| glam::vec2(2.0, -2.0) * (c - 0.5))
 	}
 
 	fn movement(&self) -> Option<glam::Vec2> {
@@ -150,9 +148,7 @@ pub trait CoordinateSource {
 	}
 
 	fn target_movement(&self) -> Option<glam::Vec2> {
-		self
-			.movement()
-			.map(|c| glam::vec2(2.0, -2.0) * c)
+		self.movement().map(|c| glam::vec2(2.0, -2.0) * c)
 	}
 }
 
@@ -161,7 +157,10 @@ impl CoordinateSource for leptos::ev::PointerEvent {
 		let element = self
 			.current_target()
 			.and_then(|target| target.dyn_into::<web_sys::Element>().ok_or_log())?;
-		Some(glam::vec2(element.client_width() as f32, element.client_height() as f32))
+		Some(glam::vec2(
+			element.client_width() as f32,
+			element.client_height() as f32,
+		))
 	}
 
 	fn pixel_position(&self) -> glam::Vec2 {
@@ -209,7 +208,8 @@ impl QueueExt for wgpu::Queue {
 	}
 }
 
-fn animation_frame_throttle_filter<R>() -> impl Fn(std::rc::Rc<dyn Fn() -> R>) -> std::rc::Rc<std::cell::RefCell<Option<R>>> + Clone {
+fn animation_frame_throttle_filter<R>(
+) -> impl Fn(std::rc::Rc<dyn Fn() -> R>) -> std::rc::Rc<std::cell::RefCell<Option<R>>> + Clone {
 	let is_available = std::rc::Rc::new(std::cell::Cell::new(true));
 	let last_return_value: std::rc::Rc<std::cell::RefCell<Option<R>>> = Default::default();
 
@@ -241,7 +241,10 @@ where
 	F: Fn() -> R + Clone + 'static,
 	R: 'static,
 {
-	leptos_use::utils::create_filter_wrapper(std::rc::Rc::new(animation_frame_throttle_filter()), func)
+	leptos_use::utils::create_filter_wrapper(
+		std::rc::Rc::new(animation_frame_throttle_filter()),
+		func,
+	)
 }
 
 pub fn use_animation_frame_throttle_with_arg<F, Arg, R>(
@@ -252,5 +255,8 @@ where
 	Arg: Clone + 'static,
 	R: 'static,
 {
-	leptos_use::utils::create_filter_wrapper_with_arg(std::rc::Rc::new(animation_frame_throttle_filter()), func)
+	leptos_use::utils::create_filter_wrapper_with_arg(
+		std::rc::Rc::new(animation_frame_throttle_filter()),
+		func,
+	)
 }

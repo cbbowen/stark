@@ -122,9 +122,10 @@ impl Atlas {
 	}
 
 	pub fn get_chart_mut(&mut self, key: ChartKey) -> &mut Chart {
-		let chart = self.charts.entry(key).or_insert_with(|| {
-			self.tile_pool.allocate_tile().into()
-		});
+		let chart = self
+			.charts
+			.entry(key)
+			.or_insert_with(|| self.tile_pool.allocate_tile().into());
 		Rc::make_mut(chart)
 	}
 }

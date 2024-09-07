@@ -1,6 +1,6 @@
-use std::future::Future;
 use crate::util::*;
 use leptos::*;
+use std::future::Future;
 
 #[component]
 pub fn AsyncProvider<ContextFuture, Context, ContextError, ErrorFallback, ErrorFallbackResult>(
@@ -12,7 +12,7 @@ pub fn AsyncProvider<ContextFuture, Context, ContextError, ErrorFallback, ErrorF
 where
 	Context: Clone + 'static,
 	ContextError: Clone + Into<leptos::error::Error> + 'static,
-	ContextFuture: Future<Output=Result<Context, ContextError>> + 'static,
+	ContextFuture: Future<Output = Result<Context, ContextError>> + 'static,
 	ErrorFallback: Fn(RwSignal<Errors>) -> ErrorFallbackResult + 'static,
 	ErrorFallbackResult: IntoView + 'static,
 {
@@ -44,7 +44,8 @@ where
 	}
 }
 
-/// Unconditionally provides a `render::Context` context to its descendants. All `RenderCanvas`'s should have this as an ancestor.
+/// Unconditionally provides a `render::Context` context to its descendants. All `RenderCanvas`'s
+/// should have this as an ancestor.
 #[component]
 pub fn RenderContextProvider<ErrorFallback, ErrorFallbackResult>(
 	#[prop(optional, into)] initializing_fallback: ViewFn,
@@ -55,9 +56,7 @@ where
 	ErrorFallback: Fn(RwSignal<Errors>) -> ErrorFallbackResult + 'static,
 	ErrorFallbackResult: IntoView + 'static,
 {
-	let context = async {
-		crate::WgpuContext::new().await.map(std::rc::Rc::new)
-	};
+	let context = async { crate::WgpuContext::new().await.map(std::rc::Rc::new) };
 	view! {
 		<AsyncProvider context initializing_fallback error_fallback>
 			{children.clone()}

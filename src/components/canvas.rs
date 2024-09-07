@@ -392,7 +392,6 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		}
 	};
 
-
 	let configured = move |configuration: wgpu::SurfaceConfiguration| {
 		set_surface_texture_format.try_set(Some(configuration.format));
 	};
