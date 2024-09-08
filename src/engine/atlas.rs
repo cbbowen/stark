@@ -5,7 +5,7 @@ use crate::WgpuContext;
 use glam::Vec2;
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct AABox {
 	min: Vec2,
@@ -85,12 +85,12 @@ type Chart = tile::Tile<ChartData>;
 #[derive(Clone)]
 struct Atlas {
 	tile_pool: tile::Pool<ChartData>,
-	charts: HashMap<ChartKey, Rc<Chart>>,
-	usage_bind_group: Rc<BindGroup0>,
+	charts: HashMap<ChartKey, Arc<Chart>>,
+	usage_bind_group: Arc<BindGroup0>,
 }
 
 impl Atlas {
-	pub fn new(context: Rc<WgpuContext>) -> Self {
+	pub fn new(context: Arc<WgpuContext>) -> Self {
 		let device = context.device();
 		let chart_sampler = &device.create_sampler(&wgpu::SamplerDescriptor {
 			address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -117,7 +117,7 @@ impl Atlas {
 		}
 	}
 
-	pub fn get_chart(&self, key: &ChartKey) -> Option<Rc<Chart>> {
+	pub fn get_chart(&self, key: &ChartKey) -> Option<Arc<Chart>> {
 		self.charts.get(key).cloned()
 	}
 
@@ -126,7 +126,7 @@ impl Atlas {
 			.charts
 			.entry(key)
 			.or_insert_with(|| self.tile_pool.allocate_tile().into());
-		Rc::make_mut(chart)
+		Arc::make_mut(chart)
 	}
 }
 

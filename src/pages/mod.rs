@@ -1,21 +1,29 @@
 use crate::components::*;
 use crate::*;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_meta::*;
+use leptos::children::Children;
 use thaw::Card;
+use leptos_router::components::A;
+use std::rc::Rc;
+use crate::util::*;
 
 #[component]
 pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
-	run_as_child(move || {
-		let context: std::rc::Rc<WgpuContext> = expect_context();
-		provide_context(render::Resources::new(context.device()));
-		children()
-	})
+	let context: Rc<WgpuContext> = use_yolo_context();
+	let resources = YoloValue::new(render::Resources::new(context.device()));
+	
+	use leptos::context::Provider;
+	view! {
+		<Provider value=resources>
+			{children()}
+		</Provider>
+	}
 }
 
 #[component]
 pub fn Home() -> impl IntoView {
-	let drawing_color = leptos::create_rw_signal(glam::Vec3::new(0.5, 0.0, 0.0));
+	let drawing_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
 
 	view! {
 		<Title text="Home"/>
@@ -25,11 +33,12 @@ pub fn Home() -> impl IntoView {
 					view! { <fallback::Initializing /> }
 				}
 				error_fallback=|errors| {
+					let errors = errors.get();
 					view! { <fallback::ErrorList errors></fallback::ErrorList> }
 				}>
 				<ShaderModulesProvider>
 					<Canvas drawing_color=drawing_color/>
-					<Card class="ColorPickerCard" title="Color Picker">
+					<Card class="ColorPickerCard">
 						<ColorPicker color=drawing_color/>
 					</Card>
 				</ShaderModulesProvider>
@@ -40,7 +49,7 @@ pub fn Home() -> impl IntoView {
 
 #[component]
 pub fn NotFound() -> impl IntoView {
-	let path = use_location().pathname.get();
+	let path = leptos_router::hooks::use_location().pathname.get();
 
 	view! {
 		<Title text="Not found"/>

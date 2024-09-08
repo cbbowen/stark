@@ -45,7 +45,6 @@ fn preprocess_wgsl(current_path: impl AsRef<std::path::Path>, original_source: &
     for capture in include_re.captures_iter(original_source) {
         let path_match = capture.name("path").unwrap();
         let path = path_match.as_str();
-        println!("include!(\"{path}\")");
         let include_path = current_path.join(path);
         let include_source = read_to_string(&include_path);
         let include_source = preprocess_wgsl(include_path.parent().unwrap(), &include_source);

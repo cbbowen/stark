@@ -2,10 +2,13 @@ use super::render_surface;
 use crate::shaders::color_picker::*;
 use crate::util::*;
 use crate::{render, WgpuContext};
-use leptos::{component, event_target_value, view, IntoView};
-use leptos::{expect_context, prelude::*};
+use leptos::prelude::*;
+use leptos::{component, view, IntoView};
+use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::Arc;
 use wgpu::util::DeviceExt;
+use crate::components::*;
 
 fn create_bind_group(device: &wgpu::Device) -> (bind_groups::BindGroup0, wgpu::Buffer) {
 	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -61,20 +64,20 @@ fn create_render_pipeline(
 }
 
 #[component]
-pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
+pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 	// Create a lens into `color`.
 	let lightness = create_memo(move |_| color.get().x);
 	let set_lightness = move |l| color.update(|lab| lab.x = l);
 
-	let context: Rc<WgpuContext> = expect_context();
-	let resources: render::Resources = expect_context();
+	let context: Rc<WgpuContext> = use_yolo_context();
+	let resources: Rc<render::Resources> = use_yolo_context();
 
 	let (texture_format, set_texture_format) = create_signal(None);
 
 	let render_pipeline = {
 		let context = context.clone();
-		create_derived(move || {
-			Some(Rc::new(create_render_pipeline(
+		create_local_derived(move || {
+			Some(Arc::new(create_render_pipeline(
 				context.device(),
 				texture_format.get()?,
 				&resources.color_picker,
@@ -86,8 +89,8 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 
 	let render = {
 		let context = context.clone();
-		let bind_group = Rc::new(bind_group);
-		CallbackSignal::new(move || {
+		let bind_group = Arc::new(bind_group);
+		create_local_derived(move || {
 			let context = context.clone();
 			let bind_group = bind_group.clone();
 			let render_pipeline = render_pipeline.get();
@@ -97,7 +100,8 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 				.queue()
 				.write_buffer(&buffer, 0, bytemuck::cast_slice(&[lightness as f32]));
 
-			move |view: wgpu::TextureView| {
+			let callback = move |view: wgpu::TextureView| {
+				tracing::trace!("ColorPicker::render::callback");
 				let Some(render_pipeline) = render_pipeline.as_ref() else { return };
 				let mut encoder =
 					context
@@ -125,7 +129,8 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 					render_pass.draw(0..4, 0..1);
 				}
 				context.queue().submit([encoder.finish()]);
-			}
+			};
+			LocalCallback::new(callback)
 		})
 	};
 
@@ -155,6 +160,7 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 	let configured = move |configuration: wgpu::SurfaceConfiguration| {
 		set_texture_format.set(Some(configuration.format));
 	};
+	let configured = LocalCallback::new(configured);
 
 	view! {
 		<div class="ColorPicker">

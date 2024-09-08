@@ -30,23 +30,25 @@ impl WgpuContext {
 			flags: wgpu::InstanceFlags::from_build_config().with_env(),
 			..Default::default()
 		});
+		tracing::info!(?instance);
 
 		let adapter = instance
-			.request_adapter(&Default::default())
+			.request_adapter(&wgpu::RequestAdapterOptions::default())
 			.await
 			.ok_or(WgpuContextError::RequestAdapterError)?;
+		tracing::info!(?adapter);
 
 		let (device, queue) = adapter
 			.request_device(
 				&wgpu::DeviceDescriptor {
 					required_features: wgpu::Features::default()
-						| wgpu::Features::INDIRECT_FIRST_INSTANCE
-						| wgpu::Features::MULTIVIEW,
+						| wgpu::Features::INDIRECT_FIRST_INSTANCE,
 					..Default::default()
 				},
 				None,
 			)
 			.await?;
+		tracing::info!(?device);
 
 		Ok(Self {
 			instance,

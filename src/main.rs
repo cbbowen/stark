@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 
 #[derive(thiserror::Error, Debug)]
 #[error("no global tracing subscriber set")]

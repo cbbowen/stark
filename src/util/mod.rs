@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
+use std::ops::Deref;
+use std::sync::Mutex;
 
-use leptos::*;
+use leptos::prelude::*;
 
 // mod distinct;
 // pub use distinct::Distinct;
@@ -17,13 +19,39 @@ use leptos::*;
 mod result_ext;
 pub use result_ext::*;
 
-mod callback;
-pub use callback::*;
+mod yolo;
+pub use yolo::*;
 
-mod once;
-pub use once::*;
+mod leptos_try;
+pub use leptos_try::*;
+
+use leptos::wasm_bindgen;
+use leptos::web_sys;
 use wasm_bindgen::JsCast;
 use wgpu::Extent3d;
+
+use std::sync::Arc;
+use std::rc::Rc;
+
+use leptos::prelude::*;
+
+#[derive(Clone, Copy)]
+pub struct Unequal<T>(T);
+
+impl<T: std::fmt::Debug> std::fmt::Debug for Unequal<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		 self.0.fmt(f)
+	}
+}
+
+impl<T> PartialEq for Unequal<T> {
+	fn eq(&self, _other: &Self) -> bool { false }
+}
+
+impl<T> std::ops::Deref for Unequal<T> {
+	type Target = T;
+	fn deref(&self) -> &Self::Target { &self.0 }
+}
 
 /// It is useful to think of signals as having two channels:
 ///
@@ -34,46 +62,50 @@ use wgpu::Extent3d;
 /// This differs from `leptos::create_memo` which additionally does not notify if the new value is
 /// equal to the previous one. In some cases, that is desirable, but it requires the type to
 /// implement `PartialEq` which is not always possible. In others, e.g. `Trigger`, it is actively
-/// undesirable. Fortunately, Leptos provides a lower-level primitive that makes it trivial to
-/// separate the two.
-pub fn create_derived<T>(f: impl Fn() -> T + 'static) -> Memo<T> {
-	create_owning_memo(move |_| (f(), true))
+/// undesirable. Leptos used to provide a lower-level primitive that made it trivial to separate
+/// the two, but 0.7 introduced a (completely unnecessary) `PartialEq` bound on those.
+pub fn create_derived<T: Clone + Send + Sync + 'static>(f: impl Fn() -> T + Send + Sync + 'static) -> Signal<T> {
+	let memo = Memo::new_owning(move |_| (Unequal(f()), true));
+	Signal::derive(move || memo.with(|m| m.0.clone()))
 }
 
-pub trait ElementExt<T: html::ElementDescriptor + 'static> {
-	fn mount_trigger(self) -> Trigger;
+pub fn create_local_derived<T: Clone + 'static>(f: impl Fn() -> T + 'static) -> Signal<T, LocalStorage> {
+	use send_wrapper::SendWrapper;
+	// Ideally, we would just use a `Memo` with `LocalStorage` here, but that isn't implemented yet.
+	let f= SendWrapper::new(f);
+	let f = move || f();
+	let memo = Memo::new_owning(move |_| (Unequal(SendWrapper::new(f())), true));
+	Signal::derive_local(move || memo.with(|m| m.0.deref().clone()))
 }
 
-impl<T: html::ElementDescriptor + 'static> ElementExt<T> for HtmlElement<T> {
-	fn mount_trigger(self) -> Trigger {
-		let trigger = create_trigger();
-		let _ = self.on_mount(move |_| {
-			trigger.try_notify();
-		});
-		trigger
+pub struct LocalCallback<In: 'static, Out: 'static = ()>(
+	StoredValue<Box<dyn Fn(In) -> Out>, LocalStorage>
+);
+
+impl<In, Out> Copy for LocalCallback<In, Out> {}
+impl<In, Out> Clone for LocalCallback<In, Out> {
+	fn clone(&self) -> Self {
+		 *self
 	}
 }
 
-pub trait NodeRefExt<T: html::ElementDescriptor> {
-	/// Creates a signal that provides the `HtmlElement` once it is mounted to the DOM.
-	fn mounted_element(self) -> OnceMemo<HtmlElement<T>>;
-}
-
-impl<T: html::ElementDescriptor + Clone + 'static> NodeRefExt<T> for NodeRef<T> {
-	fn mounted_element(self) -> OnceMemo<HtmlElement<T>> {
-		let element = OnceMemo::new(move || self.get());
-		OnceMemo::new(move || {
-			element.get().and_then(|e| {
-				if e.is_mounted() {
-					Some(e)
-				} else {
-					e.mount_trigger().try_track();
-					None
-				}
-			})
-		})
+impl<In, Out> LocalCallback<In, Out> {
+	pub fn new(value: impl Fn(In) -> Out + 'static) -> Self {
+		 Self(StoredValue::new_local(Box::new(value)))
 	}
 }
+
+impl<In, Out, F: Fn(In) -> Out + 'static> From<F> for LocalCallback<In, Out> {
+	fn from(value: F) -> Self {
+		 Self::new(value)
+	}
+}
+
+impl<In, Out> leptos::prelude::Callable<In, Out> for LocalCallback<In, Out> {
+	fn run(&self, input: In) -> Out {
+		 self.0.with_value(|f| f(input))
+	}
+} 
 
 #[derive(thiserror::Error, Debug)]
 #[error("javascript error")]
@@ -209,25 +241,25 @@ impl QueueExt for wgpu::Queue {
 }
 
 fn animation_frame_throttle_filter<R>(
-) -> impl Fn(std::rc::Rc<dyn Fn() -> R>) -> std::rc::Rc<std::cell::RefCell<Option<R>>> + Clone {
-	let is_available = std::rc::Rc::new(std::cell::Cell::new(true));
-	let last_return_value: std::rc::Rc<std::cell::RefCell<Option<R>>> = Default::default();
+) -> impl Fn(Arc<dyn Fn() -> R>) -> Arc<Mutex<Option<R>>> + Clone {
+	let is_available = Rc::new(std::cell::Cell::new(true));
+	let last_return_value: Arc<Mutex<Option<R>>> = Default::default();
 
-	move |invoke: std::rc::Rc<dyn Fn() -> R>| {
+	move |invoke: Arc<dyn Fn() -> R>| {
 		let last_return_value = last_return_value.clone();
 		let is_available = is_available.clone();
 		if is_available.take() {
-			#[cfg(debug_assertions)]
-			let prev = SpecialNonReactiveZone::enter();
+			use leptos::reactive_graph::diagnostics::SpecialNonReactiveZone;
 
-			let return_value = invoke();
+			let return_value = {
+				#[cfg(debug_assertions)]
+				let _guard = SpecialNonReactiveZone::enter();
+				invoke()
+			};
 
-			#[cfg(debug_assertions)]
-			SpecialNonReactiveZone::exit(prev);
+			*last_return_value.lock().unwrap() = Some(return_value);
 
-			last_return_value.replace(Some(return_value));
-
-			leptos::request_animation_frame(move || is_available.set(true));
+			request_animation_frame(move || is_available.set(true));
 		}
 
 		return last_return_value;
@@ -236,27 +268,27 @@ fn animation_frame_throttle_filter<R>(
 
 pub fn use_animation_frame_throttle<F, R>(
 	func: F,
-) -> impl Fn() -> std::rc::Rc<std::cell::RefCell<Option<R>>> + Clone
+) -> impl Fn() -> Arc<Mutex<Option<R>>> + Clone
 where
 	F: Fn() -> R + Clone + 'static,
 	R: 'static,
 {
 	leptos_use::utils::create_filter_wrapper(
-		std::rc::Rc::new(animation_frame_throttle_filter()),
+		Arc::new(animation_frame_throttle_filter()),
 		func,
 	)
 }
 
 pub fn use_animation_frame_throttle_with_arg<F, Arg, R>(
 	func: F,
-) -> impl Fn(Arg) -> std::rc::Rc<std::cell::RefCell<Option<R>>> + Clone
+) -> impl Fn(Arg) -> Arc<Mutex<Option<R>>> + Clone
 where
 	F: Fn(Arg) -> R + Clone + 'static,
 	Arg: Clone + 'static,
 	R: 'static,
 {
 	leptos_use::utils::create_filter_wrapper_with_arg(
-		std::rc::Rc::new(animation_frame_throttle_filter()),
+		Arc::new(animation_frame_throttle_filter()),
 		func,
 	)
 }

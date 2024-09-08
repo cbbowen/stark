@@ -1,5 +1,6 @@
-use leptos::*;
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use leptos::prelude::*;
+use leptos::context::provide_context;
+use std::{collections::HashSet, sync::Arc, sync::RwLock};
 
 #[derive(Default)]
 struct InternalKeyboardState {
@@ -7,28 +8,28 @@ struct InternalKeyboardState {
 }
 
 #[derive(Clone, Default)]
-pub struct KeyboardState(Rc<RefCell<InternalKeyboardState>>);
+pub struct KeyboardState(Arc<RwLock<InternalKeyboardState>>);
 
 impl KeyboardState {
 	pub fn all_pressed(&self) -> HashSet<String> {
-		self.0.as_ref().borrow().pressed.clone()
+		self.0.read().unwrap().pressed.clone()
 	}
 
 	pub fn is_pressed(&self, key: &str) -> bool {
-		self.0.as_ref().borrow().pressed.contains(key)
+		self.0.read().unwrap().pressed.contains(key)
 	}
 
 	fn set_down(&self, key: String) -> bool {
-		self.0.as_ref().borrow_mut().pressed.insert(key)
+		self.0.write().unwrap().pressed.insert(key)
 	}
 
 	fn set_up(&self, key: &str) -> bool {
-		self.0.as_ref().borrow_mut().pressed.remove(key)
+		self.0.write().unwrap().pressed.remove(key)
 	}
 }
 
 #[component]
-pub fn KeyboardStateProvider(children: ChildrenFn) -> impl IntoView {
+pub fn KeyboardStateProvider(children: Children) -> impl IntoView {
 	let state = KeyboardState::default();
 	let keydown = {
 		let state = state.clone();
@@ -47,13 +48,15 @@ pub fn KeyboardStateProvider(children: ChildrenFn) -> impl IntoView {
 		}
 	};
 
-	let keydown_handle = leptos::window_event_listener(leptos::ev::keydown, keydown);
-	let keyup_handle = leptos::window_event_listener(leptos::ev::keyup, keyup);
-	leptos::on_cleanup(move || {
+	let keydown_handle = window_event_listener(leptos::ev::keydown, keydown);
+	let keyup_handle = window_event_listener(leptos::ev::keyup, keyup);
+	on_cleanup(move || {
 		keydown_handle.remove();
 		keyup_handle.remove();
 	});
 
 	provide_context(state);
-	view! { <div>{children}</div> }
+	view! {
+		{children()}
+	}
 }

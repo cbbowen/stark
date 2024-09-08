@@ -1,8 +1,9 @@
 use crate::{shaders::chart::*, util::QueueExt, WgpuContext};
 use encase::{internal::WriteInto, CalculateSizeFor, ShaderType};
 use std::pin::Pin;
-use std::{cell::RefCell, marker::PhantomData, ops::Deref, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, ops::Deref};
 use wgpu::{BufferAddress, Extent3d};
+use std::sync::Arc;
 
 #[derive(Clone)]
 struct StableVec<T> {
@@ -125,7 +126,7 @@ impl FreeList {
 }
 
 struct PoolInternal<Data> {
-	context: Rc<WgpuContext>,
+	context: Arc<WgpuContext>,
 	blocks: StableVec<Block>,
 	free_list: FreeList,
 	texture_layer_descriptor: TextureLayerDescriptor,
@@ -146,7 +147,7 @@ impl<Data: 'static> PoolInternal<Data>
 where
 	[Data]: CalculateSizeFor,
 {
-	pub fn allocate_tile(self: Rc<Self>) -> Tile<Data> {
+	pub fn allocate_tile(self: Arc<Self>) -> Tile<Data> {
 		let index = self.allocate_index();
 		Tile::<Data> {
 			pool: self.clone(),
@@ -214,11 +215,11 @@ where
 
 #[derive(Clone)]
 pub struct Pool<Data> {
-	internal: Rc<PoolInternal<Data>>,
+	internal: Arc<PoolInternal<Data>>,
 }
 
 impl<Data> Pool<Data> {
-	pub fn context(&self) -> Rc<WgpuContext> {
+	pub fn context(&self) -> Arc<WgpuContext> {
 		self.internal.context.clone()
 	}
 }
@@ -227,7 +228,7 @@ impl<Data: 'static> Pool<Data>
 where
 	[Data]: CalculateSizeFor,
 {
-	pub fn new(context: Rc<WgpuContext>, texture_layer_descriptor: TextureLayerDescriptor) -> Self {
+	pub fn new(context: Arc<WgpuContext>, texture_layer_descriptor: TextureLayerDescriptor) -> Self {
 		Pool {
 			internal: PoolInternal {
 				context,
@@ -246,7 +247,7 @@ where
 }
 
 pub struct Tile<Data> {
-	pool: Rc<PoolInternal<Data>>,
+	pool: Arc<PoolInternal<Data>>,
 	index: Index,
 	_data: PhantomData<Data>,
 }

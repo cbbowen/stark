@@ -1,12 +1,15 @@
 use crate::components::*;
 use crate::render;
-use crate::util::create_derived;
+use crate::util::create_local_derived;
 use crate::*;
 use encase::ShaderType;
 use glam::Vec4Swizzles;
-use leptos::*;
+use leptos::prelude::*;
+use util::SetExt;
+use crate::util::use_yolo_context;
+use util::LocalCallback;
 use std::rc::Rc;
-use util::CallbackSignal;
+use std::sync::Arc;
 use util::CoordinateSource;
 use util::PointerCapture;
 use wgpu::util::DeviceExt;
@@ -188,8 +191,8 @@ fn create_drawing_pipeline(
 
 #[component]
 pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView {
-	let context: Rc<WgpuContext> = expect_context();
-	let resources: render::Resources = expect_context();
+	let context: Rc<WgpuContext> = use_yolo_context();
+	let resources: Rc<render::Resources> = use_yolo_context();
 
 	let canvas_sampler = create_canvas_sampler(context.device());
 
@@ -202,8 +205,9 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 
 	let render_pipeline = {
 		let context = context.clone();
-		create_derived(move || {
-			Some(Rc::new(canvas_render_pipeline(
+		let resources = resources.clone();
+		create_local_derived(move || {
+			Some(Arc::new(canvas_render_pipeline(
 				context.device(),
 				surface_texture_format.get()?,
 				&resources.canvas,
@@ -211,22 +215,21 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 		})
 	};
 
-	let canvas_to_view = leptos::create_rw_signal(glam::Mat4::from_scale_rotation_translation(
+	let canvas_to_view = RwSignal::new(glam::Mat4::from_scale_rotation_translation(
 		glam::Vec3::new(2.0, 2.0, 1.0),
 		glam::Quat::IDENTITY,
 		glam::Vec3::new(-1.0, -1.0, 0.0),
 	));
 
-	let redraw_trigger = create_trigger();
-	// let interval = std::time::Duration::from_millis(1000);
-	// crate::util::set_interval_and_clean_up(move || redraw_trigger.notify(), interval).ok_or_log();
+	let redraw_trigger = ArcTrigger::new();
 
 	let render = {
 		let context = context.clone();
-		let canvas_bind_group0 = Rc::new(canvas_bind_group0);
-		let canvas_bind_group1 = Rc::new(canvas_bind_group1);
-		let canvas_to_view_buffer = Rc::new(canvas_to_view_buffer);
-		CallbackSignal::new(move || {
+		let canvas_bind_group0 = Arc::new(canvas_bind_group0);
+		let canvas_bind_group1 = Arc::new(canvas_bind_group1);
+		let canvas_to_view_buffer = Arc::new(canvas_to_view_buffer);
+		let redraw_trigger = redraw_trigger.clone();
+		create_local_derived(move || {
 			let context = context.clone();
 			redraw_trigger.track();
 			let canvas_bind_group0 = canvas_bind_group0.clone();
@@ -234,7 +237,8 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 			let canvas_to_view_buffer = canvas_to_view_buffer.clone();
 			let render_pipeline = render_pipeline.get();
 			let canvas_to_view = canvas_to_view.get();
-			move |view: wgpu::TextureView| {
+			let callback = move |view: wgpu::TextureView| {
+				tracing::trace!("Canvas::render::callback");
 				let Some(render_pipeline) = render_pipeline.clone() else {
 					return;
 				};
@@ -279,7 +283,8 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 					render_pass.draw(0..4, 0..1);
 				}
 				context.queue().submit([encoder.finish()]);
-			}
+			};
+			LocalCallback::new(callback)
 		})
 	};
 
@@ -290,10 +295,10 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 
 	let draw = {
 		let context = context.clone();
-		let canvas_texture_view = Rc::new(canvas_texture_view);
-		let drawing_action_bind_group = Rc::new(drawing_action_bind_group);
-		let drawing_action_buffer = Rc::new(drawing_action_buffer);
-		let drawing_pipeline = Rc::new(drawing_pipeline);
+		let canvas_texture_view = Arc::new(canvas_texture_view);
+		let drawing_action_bind_group = Arc::new(drawing_action_bind_group);
+		let drawing_action_buffer = Arc::new(drawing_action_buffer);
+		let drawing_pipeline = Arc::new(drawing_pipeline);
 		move |position: glam::Vec2, pressure: f32, color: glam::Vec3| {
 			let drawing_action_bind_group = drawing_action_bind_group.clone();
 			let mut encoder =
@@ -339,7 +344,7 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 				render_pass.draw(0..4, 0..1);
 			}
 			context.queue().submit(std::iter::once(encoder.finish()));
-			redraw_trigger.notify();
+			redraw_trigger.trigger();
 		}
 	};
 
@@ -388,8 +393,9 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 	};
 
 	let configured = move |configuration: wgpu::SurfaceConfiguration| {
-		set_surface_texture_format.try_set(Some(configuration.format));
+		set_surface_texture_format.try_set_or_log(Some(configuration.format));
 	};
+	let configured = LocalCallback::new(configured);
 
 	view! {
 		<div class="Canvas">

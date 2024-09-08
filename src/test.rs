@@ -5,17 +5,17 @@ use wgpu::Extent3d;
 use crate::*;
 use std::io::Read;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct WgpuTestContext {
-	context: Rc<WgpuContext>,
+	context: Arc<WgpuContext>,
 
 	copy_scaled: render::Shader,
 }
 
 impl Deref for WgpuTestContext {
-	type Target = Rc<WgpuContext>;
-	fn deref(&self) -> &Rc<WgpuContext> {
+	type Target = Arc<WgpuContext>;
+	fn deref(&self) -> &Arc<WgpuContext> {
 		&self.context
 	}
 }
@@ -58,7 +58,7 @@ impl WgpuTestContext {
 		}
 		.into();
 
-		let context = Rc::new(context);
+		let context = Arc::new(context);
 		Ok(Self {
 			context,
 			copy_scaled,
