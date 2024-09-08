@@ -20,13 +20,14 @@ static_assertions = "1.1.0"
 tracing = { version = "0.1", features = ["release_max_level_warn"] }
 tracing-log = { version = "0.2", optional = true }
 tracing-subscriber = "0.3"
-wgpu = { version = "22.1.*" }
+wgpu = "22.1" # We could enable the "webgl" feature to support older browsers.
 bytemuck = { version = "1.17", features = ["derive"] }
 encase = { version = "0.9.0", features = ["glam"] }
 # This must match the version supported by encase.
 glam = { version = "0.28", features = ["bytemuck"] }
 wgsl_to_wgpu_macro = { path = "deps/wgsl_to_wgpu_macro", features = ["track_path"]}
 fastrand = "2.1"
+thaw = "0.3"
 
 [dev-dependencies]
 wasm-bindgen = "0.2"
@@ -58,8 +59,7 @@ csr = [
 	"leptos/csr",
 	"leptos_meta/csr",
 	"leptos_router/csr",
-	# Enable this to support older browsers.
-	# "wgpu/webgl",
+	"thaw/csr",
 ]
 # Enable the "log" feature only if we include libraries that depend on it.
 # Our code will use "tracing" exclusively.

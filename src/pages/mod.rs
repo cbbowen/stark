@@ -2,6 +2,7 @@ use crate::components::*;
 use crate::*;
 use leptos::*;
 use leptos_meta::*;
+use thaw::Card;
 
 #[component]
 pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
@@ -27,10 +28,10 @@ pub fn Home() -> impl IntoView {
 					view! { <fallback::ErrorList errors></fallback::ErrorList> }
 				}>
 				<ShaderModulesProvider>
-					<div class="Home">
-						<Canvas drawing_color=drawing_color/>
+					<Canvas drawing_color=drawing_color/>
+					<Card class="ColorPickerCard" title="Color Picker">
 						<ColorPicker color=drawing_color/>
-					</div>
+					</Card>
 				</ShaderModulesProvider>
 			</RenderContextProvider>
 		</KeyboardStateProvider>

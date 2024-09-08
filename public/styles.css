@@ -3,12 +3,14 @@
 body {
 	margin: 0px;
 	background-color: rgb(64, 64, 64);
+
+	font-family: sans-serif;
 }
 
-.Home {
+/* .Home {
 	display: flex;
 	flex-flow: row nowrap;
-}
+} */
 
 .RenderSurface {
 	width: 100%;
@@ -17,6 +19,13 @@ body {
 
 .Canvas {
 	flex: 4;
+}
+
+.ColorPickerCard {
+	position: absolute;
+	top: 20px;
+	right: 20px;
+	width: 300px; 
 }
 
 .ColorPicker {

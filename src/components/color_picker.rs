@@ -174,8 +174,6 @@ pub fn ColorPicker(color: leptos::RwSignal<glam::Vec3>) -> impl IntoView {
 				prop:value=lightness
 				on:input=move |ev| { set_lightness(event_target_value(&ev).parse().unwrap()) }
 			/>
-
-			<span>{lightness}</span>
 		</div>
 	}
 }
