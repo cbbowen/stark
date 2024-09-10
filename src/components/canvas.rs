@@ -191,13 +191,13 @@ fn create_drawing_pipeline(
 
 #[component]
 pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView {
-	let context: Rc<WgpuContext> = use_yolo_context();
-	let resources: Rc<render::Resources> = use_yolo_context();
+	let context: Arc<WgpuContext> = use_yolo_context();
+	let resources: Arc<render::Resources> = use_yolo_context();
 
 	let canvas_sampler = create_canvas_sampler(context.device());
 
 	let canvas_texture_format = wgpu::TextureFormat::Rgba16Float;
-	let (surface_texture_format, set_surface_texture_format) = create_signal(None);
+	let (surface_texture_format, set_surface_texture_format) = signal_local(None);
 
 	let canvas_texture_view = create_canvas_texture_view(context.device(), canvas_texture_format);
 	let (canvas_bind_group0, canvas_bind_group1, canvas_to_view_buffer) =
@@ -238,7 +238,6 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 			let render_pipeline = render_pipeline.get();
 			let canvas_to_view = canvas_to_view.get();
 			let callback = move |view: wgpu::TextureView| {
-				tracing::trace!("Canvas::render::callback");
 				let Some(render_pipeline) = render_pipeline.clone() else {
 					return;
 				};

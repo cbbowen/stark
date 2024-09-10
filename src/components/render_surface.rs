@@ -29,7 +29,7 @@ pub type WgpuSurface = Rc<wgpu::Surface<'static>>;
 
 #[tracing::instrument(err)]
 fn create_surface(
-	context: Rc<WgpuContext>,
+	context: Arc<WgpuContext>,
 	element: web_sys::HtmlCanvasElement,
 ) -> Result<WgpuSurface, RenderSurfaceError> {
 	use RenderSurfaceError::*;
@@ -72,7 +72,7 @@ pub fn RenderSurface(
 	#[prop(optional, into)] configured: Option<ConfiguredCallback>,
 	#[prop(default = 250.0, into)] min_configure_interval: f64,
 ) -> impl IntoView {
-	let context: Rc<WgpuContext> = use_yolo_context();
+	let context: Arc<WgpuContext> = use_yolo_context();
 
 	let node_ref = node_ref.unwrap_or_else(NodeRef::new);
 
@@ -113,7 +113,7 @@ pub fn RenderSurface(
 	// simply put the configure function behind a throttle.
 
 	let (needs_reconfigure, set_needs_reconfigure, clear_needs_reconfigure) = {
-		let (get, write) = signal(true);
+		let (get, write) = signal_local(true);
 		let set = use_debounce_fn(move || write.try_set_or_log(true), min_configure_interval);
 		let clear = move || *write.write_untracked() = false;
 		(get, set, clear)
@@ -124,17 +124,17 @@ pub fn RenderSurface(
 		// TODO: Figure out why we're getting bogus size updates here.
 		if width == 0 || height == 0 {
 			warn!(width, height, "RenderSurface::write_resize failed");
-			return
+			return;
 		};
 		size.set(Some((width, height)));
 		// size.set(Some((256, 256)));
 	};
-	Effect::new(move |_| {
+	StoredValue::new_local(RenderEffect::new(move |_| {
 		if size.get().is_some() {
 			set_needs_reconfigure();
 		}
-	});
-	Effect::new(move |_| {
+	}));
+	StoredValue::new_local(RenderEffect::new(move |_| {
 		let element = node_ref.get();
 		if let Some(element) = &element {
 			write_resize(
@@ -142,7 +142,7 @@ pub fn RenderSurface(
 				element.client_height() as u32,
 			);
 		}
-	});
+	}));
 
 	let try_reconfigure = {
 		trace!("RenderSurface::try_reconfigure");

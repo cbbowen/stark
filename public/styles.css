@@ -19,6 +19,11 @@ body {
 	width: 300px; 
 }
 
+.ColorPicker {
+	display: flex;
+	flex-flow: column nowrap;
+}
+
 .ColorPicker>input[type="range"] {
 	overflow: hidden;
 	-webkit-appearance: none;

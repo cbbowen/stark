@@ -5,12 +5,12 @@ use leptos_meta::*;
 use leptos::children::Children;
 use thaw::{Card, CardHeader, CardPreview};
 use leptos_router::components::A;
-use std::rc::Rc;
+use std::sync::Arc;
 use crate::util::*;
 
 #[component]
 pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
-	let context: Rc<WgpuContext> = use_yolo_context();
+	let context: Arc<WgpuContext> = use_yolo_context();
 	let resources = YoloValue::new(render::Resources::new(context.device()));
 	
 	use leptos::context::Provider;
@@ -31,21 +31,22 @@ pub fn Home() -> impl IntoView {
 			<RenderContextProvider
 				initializing_fallback=|| {
 					view! { <fallback::Initializing /> }
-				}
-				error_fallback=|errors| {
-					let errors = errors.get();
-					view! { <fallback::ErrorList errors></fallback::ErrorList> }
 				}>
 				<ShaderModulesProvider>
+				
 					<Canvas drawing_color=drawing_color/>
+
 					<Card class="ColorPickerCard">
 						<CardHeader>
-							"Color Picker"
+							<thaw::Body1>
+								<b>"Color Picker"</b>
+							</thaw::Body1>
 						</CardHeader>
 						<CardPreview>
 							<ColorPicker color=drawing_color/>
 						</CardPreview>
 					</Card>
+
 				</ShaderModulesProvider>
 			</RenderContextProvider>
 		</KeyboardStateProvider>

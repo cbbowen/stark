@@ -69,8 +69,8 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 	let lightness = create_memo(move |_| color.get().x);
 	let set_lightness = move |l| color.update(|lab| lab.x = l);
 
-	let context: Rc<WgpuContext> = use_yolo_context();
-	let resources: Rc<render::Resources> = use_yolo_context();
+	let context: Arc<WgpuContext> = use_yolo_context();
+	let resources: Arc<render::Resources> = use_yolo_context();
 
 	let (texture_format, set_texture_format) = create_signal(None);
 
