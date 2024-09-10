@@ -39,14 +39,15 @@ pub fn App() -> impl IntoView {
 				<MetaTags/>
 			</head>
 			<body>
-				<pages::Home />
-				// <Router>
-				// <Routes>
-				// // TODO: Figure out best to handle routes. When deployed on Github pages, this will be under /stark, but when testing locally with trunk, it won't.
-				// <Route path="/stark" view=pages::Home/>
-				// <Route path="/*" view=|| view! { <Redirect path="/stark"/> }/>
-				// </Routes>
-				// </Router>
+				<thaw::ConfigProvider>
+					<Router>
+						<Routes fallback=pages::NotFound>
+							// TODO: Figure out best to handle routes. When deployed on Github pages, this will be under /stark, but when testing locally with trunk, it won't.
+							<Route path=path!("/stark") view=pages::Home/>
+							<Route path=path!("/*") view=|| view! { <Redirect path="/stark"/> }/>
+						</Routes>
+					</Router>
+				</thaw::ConfigProvider>
 			</body>
 		</html>
 	}

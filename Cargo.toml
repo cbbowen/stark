@@ -8,11 +8,10 @@ anyhow = "1.0"
 async-once-cell = "0.5"
 futures = "0.3"
 itertools = "0.13"
-leptos = { version = "0.7.0-beta4" }
-leptos_meta = { version = "0.7.0-beta4" }
-leptos_router = { version = "0.7.0-beta4" }
-# leptos-use = { version = "0.14.0-beta2" }
-leptos-use = { path = "deps/leptos-use" }
+leptos = { version = "0.7.0-beta5" }
+leptos_meta = { version = "0.7.0-beta5" }
+leptos_router = { version = "0.7.0-beta5" }
+leptos-use = { git = "https://github.com/Synphonyte/leptos-use.git", branch = "leptos-0.7" }
 # tap = "1.0"
 thiserror = "1.0"
 # This is included only so we can set the "release_max_level_warn" feature.
@@ -29,7 +28,7 @@ encase = { version = "0.9.0", features = ["glam"] }
 glam = { version = "0.28", features = ["bytemuck"] }
 wgsl_to_wgpu_macro = { path = "deps/wgsl_to_wgpu_macro", features = ["track_path"]}
 fastrand = "2.1"
-thaw = { version = "0.4.0-beta2" }
+thaw = { git = "https://github.com/thaw-ui/thaw.git" }
 send_wrapper = "0.6"
 
 [dev-dependencies]
@@ -51,17 +50,13 @@ image = { version = "0.25", default_features = false, features = ["png"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = { version = "0.1.7", optional = true }
 tracing-wasm = { version = "0.2", optional = true }
-# wasm-timer = { version = "0.2", optional = true }
 
 [features]
 default = ["csr"]
 csr = [
 	"dep:tracing-wasm",
-	# "dep:wasm-timer",
 	"dep:console_error_panic_hook",
 	"leptos/csr",
-	# "leptos_meta/csr",
-	# "leptos_router/csr",
 	"thaw/csr",
 ]
 # Enable the "log" feature only if we include libraries that depend on it.

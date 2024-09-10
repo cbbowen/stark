@@ -344,7 +344,7 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 				render_pass.draw(0..4, 0..1);
 			}
 			context.queue().submit(std::iter::once(encoder.finish()));
-			redraw_trigger.trigger();
+			redraw_trigger.notify();
 		}
 	};
 

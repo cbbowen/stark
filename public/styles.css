@@ -7,18 +7,9 @@ body {
 	font-family: sans-serif;
 }
 
-/* .Home {
-	display: flex;
-	flex-flow: row nowrap;
-} */
-
 .RenderSurface {
 	width: 100%;
 	aspect-ratio: 1/1;
-}
-
-.Canvas {
-	flex: 4;
 }
 
 .ColorPickerCard {
@@ -26,12 +17,6 @@ body {
 	top: 20px;
 	right: 20px;
 	width: 300px; 
-}
-
-.ColorPicker {
-	display: flex;
-	flex-flow: column nowrap;
-	flex: 1;
 }
 
 .ColorPicker>input[type="range"] {
