@@ -3,7 +3,7 @@ use crate::*;
 use leptos::prelude::*;
 use leptos_meta::*;
 use leptos::children::Children;
-use thaw::Card;
+use thaw::{Card, CardHeader, CardPreview};
 use leptos_router::components::A;
 use std::rc::Rc;
 use crate::util::*;
@@ -39,7 +39,12 @@ pub fn Home() -> impl IntoView {
 				<ShaderModulesProvider>
 					<Canvas drawing_color=drawing_color/>
 					<Card class="ColorPickerCard">
-						<ColorPicker color=drawing_color/>
+						<CardHeader>
+							"Color Picker"
+						</CardHeader>
+						<CardPreview>
+							<ColorPicker color=drawing_color/>
+						</CardPreview>
 					</Card>
 				</ShaderModulesProvider>
 			</RenderContextProvider>
