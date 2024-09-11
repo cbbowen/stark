@@ -12,6 +12,10 @@ body {
 	aspect-ratio: 1/1;
 }
 
+.Canvas {
+	cursor: crosshair;
+}
+
 .ColorPickerCard {
 	position: absolute;
 	top: 20px;
@@ -43,4 +47,16 @@ body {
 	height: 16px;
 	background: white;
 	box-shadow: 0px 0px 8px 0px black;
+}
+
+.BrushSizeCard {
+	position: absolute;
+	top: 420px;
+	right: 20px;
+	width: 300px; 
+}
+
+.thaw-card-preview {
+	display: flex;
+	flex-flow: column nowrap;
 }

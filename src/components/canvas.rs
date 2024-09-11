@@ -128,7 +128,7 @@ fn create_canvas_bind_groups(
 }
 
 #[component]
-pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView {
+pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>, #[prop(into)] brush_size: Signal<f64>) -> impl IntoView {
 	let context: Arc<WgpuContext> = use_context().unwrap();
 	let resources: Arc<render::Resources> = use_context().unwrap();
 
@@ -231,7 +231,7 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 	let draw = {
 		let context = context.clone();
 		let canvas_texture_view = Arc::new(canvas_texture_view);
-		move |drawable: AirbrushDrawable, color: glam::Vec3| {
+		move |drawable: AirbrushDrawable, color: glam::Vec3, brush_size: f64| {
 			let mut encoder =
 				context
 					.device()
@@ -255,7 +255,7 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 					],
 					..Default::default()
 				});
-				drawable.draw(context.queue(), &mut render_pass, color);
+				drawable.draw(context.queue(), &mut render_pass, color, brush_size as f32);
 			}
 			context.queue().submit(std::iter::once(encoder.finish()));
 			redraw_trigger.notify();
@@ -296,7 +296,7 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView 
 				let position = view_to_canvas * glam::vec4(position.x, position.y, 0.0, 1.0);
 				let position = position.xy();
 				if let Some(drawable) = airbrush.drag(InputPoint { position, pressure }) {
-					draw(drawable, drawing_color.get_untracked());
+					draw(drawable, drawing_color.get_untracked(), brush_size.get_untracked());
 				}
 			};
 		}

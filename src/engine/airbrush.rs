@@ -136,12 +136,12 @@ impl<'tool> AirbrushDrawable<'tool> {
 		queue: &wgpu::Queue,
 		render_pass: &mut wgpu::RenderPass<'_>,
 		color: glam::Vec3,
+		size_scale: f32,
 	) {
 		let p0 = self.last_point.position;
 		let p1 = self.point.position;
 		let tangent = (p1 - p0).normalize_or(Vec2::X);
 		let normal = tangent.perp();
-		let size_scale = 0.5;
 		let s0 = size_scale * self.last_point.pressure;
 		let s1 = size_scale * self.point.pressure;
 
