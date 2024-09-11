@@ -1,12 +1,11 @@
 use super::Shader;
 use crate::shaders;
-use std::sync::Arc;
 
 /// Resources that only need to be loaded once for a given device.
 #[derive(Debug)]
 pub struct Resources {
 	pub canvas: Shader,
-	pub drawing: Shader,
+	pub airbrush: Shader,
 	pub color_picker: Shader,
 }
 
@@ -18,9 +17,9 @@ impl Resources {
 				layout: shaders::canvas::create_pipeline_layout(device),
 			},
 
-			drawing: Shader {
-				module: shaders::drawing::create_shader_module(device),
-				layout: shaders::drawing::create_pipeline_layout(device),
+			airbrush: Shader {
+				module: shaders::airbrush::create_shader_module(device),
+				layout: shaders::airbrush::create_pipeline_layout(device),
 			},
 
 			color_picker: Shader {
