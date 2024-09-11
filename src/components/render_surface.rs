@@ -3,11 +3,10 @@ use crate::*;
 use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys;
-use leptos_use::{use_debounce_fn, use_element_size};
-use std::borrow::Borrow;
+use leptos_use::use_debounce_fn;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::{fmt::Debug, ops::Deref};
+use std::fmt::Debug;
 use tracing::{error, trace, warn};
 
 #[derive(Clone, Debug, thiserror::Error)]

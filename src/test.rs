@@ -1,6 +1,4 @@
-use shaders::canvas::{bind_groups, fs_main_entry, ENTRY_VS_MAIN};
 use wgpu::util::DeviceExt;
-use wgpu::Extent3d;
 
 use crate::*;
 use std::io::Read;

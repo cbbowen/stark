@@ -1,6 +1,5 @@
 use leptos::prelude::*;
 use thiserror::Error;
-use std::backtrace::Backtrace;
 
 use super::ResultExt;
 

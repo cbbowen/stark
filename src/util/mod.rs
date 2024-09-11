@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-use std::ops::Deref;
 use std::sync::Mutex;
 
 use leptos::prelude::*;
@@ -30,7 +28,6 @@ use wgpu::Extent3d;
 use std::sync::Arc;
 use std::rc::Rc;
 
-use leptos::prelude::*;
 
 #[derive(Clone, Copy)]
 pub struct Unequal<T>(T);
@@ -119,7 +116,8 @@ pub fn set_timeout_and_clean_up(
 	duration: std::time::Duration,
 ) -> Result<(), JsError> {
 	let handle = set_timeout_with_handle(cb, duration)?;
-	Ok(on_cleanup(move || handle.clear()))
+	on_cleanup(move || handle.clear());
+	Ok(())
 }
 
 pub fn set_interval_and_clean_up(
@@ -127,7 +125,8 @@ pub fn set_interval_and_clean_up(
 	duration: std::time::Duration,
 ) -> Result<(), JsError> {
 	let handle = set_interval_with_handle(cb, duration)?;
-	Ok(on_cleanup(move || handle.clear()))
+	on_cleanup(move || handle.clear());
+	Ok(())
 }
 
 pub trait PointerCapture {
@@ -258,8 +257,7 @@ fn animation_frame_throttle_filter<R>(
 
 			request_animation_frame(move || is_available.set(true));
 		}
-
-		return last_return_value;
+		last_return_value
 	}
 }
 

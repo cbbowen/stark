@@ -4,11 +4,8 @@ use crate::util::*;
 use crate::{render, WgpuContext};
 use leptos::prelude::*;
 use leptos::{component, view, IntoView};
-use std::ops::Deref;
-use std::rc::Rc;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
-use crate::components::*;
 
 fn create_bind_group(device: &wgpu::Device) -> (bind_groups::BindGroup0, wgpu::Buffer) {
 	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

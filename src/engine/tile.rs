@@ -1,7 +1,7 @@
 use crate::{shaders::chart::*, util::QueueExt, WgpuContext};
 use encase::{internal::WriteInto, CalculateSizeFor, ShaderType};
 use std::pin::Pin;
-use std::{cell::RefCell, marker::PhantomData, ops::Deref};
+use std::{cell::RefCell, marker::PhantomData};
 use wgpu::{BufferAddress, Extent3d};
 use std::sync::Arc;
 

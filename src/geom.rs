@@ -29,8 +29,8 @@ impl AABox {
 	pub fn contains(&self, point: Vec2) -> bool {
 		point.x < self.max.x
 			&& point.y < self.max.y
-			&& !(point.x < self.min.x)
-			&& !(point.y < self.min.y)
+			&& point.x >= self.min.x
+			&& point.y >= self.min.y
 	}
 
 	pub fn corners(&self) -> [Vec2; 4] {
