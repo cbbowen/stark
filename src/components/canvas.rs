@@ -235,7 +235,7 @@ pub fn Canvas(
 	let draw = {
 		let context = context.clone();
 		let canvas_texture_view = Arc::new(canvas_texture_view);
-		move |drawable: AirbrushDrawable, color: glam::Vec3, size: f32, softness: f32| {
+		move |drawable: AirbrushDrawable| {
 			let mut encoder =
 				context
 					.device()
@@ -259,13 +259,7 @@ pub fn Canvas(
 					],
 					..Default::default()
 				});
-				drawable.draw(
-					context.queue(),
-					&mut render_pass,
-					color,
-					size,
-					softness,
-				);
+				drawable.draw(&mut render_pass);
 			}
 			context.queue().submit(std::iter::once(encoder.finish()));
 			redraw_trigger.notify();
@@ -305,13 +299,15 @@ pub fn Canvas(
 				let view_to_canvas = canvas_to_view.inverse();
 				let position = view_to_canvas * glam::vec4(position.x, position.y, 0.0, 1.0);
 				let position = position.xy();
-				if let Some(drawable) = airbrush.drag(InputPoint { position, pressure }) {
-					draw(
-						drawable,
-						brush_color.get_untracked(),
-						brush_size.get_untracked() as f32,
-						brush_softness.get_untracked() as f32,
-					);
+				let input_point = InputPoint {
+					position,
+					pressure,
+					color: brush_color.get_untracked(),
+					size: brush_size.get_untracked() as f32,
+					softness: brush_softness.get_untracked() as f32,
+				};
+				if let Some(drawable) = airbrush.drag(context.queue(), input_point) {
+					draw(drawable);
 				}
 			};
 		}

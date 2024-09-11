@@ -78,6 +78,9 @@ fn create_bind_group(device: &wgpu::Device) -> (bind_groups::BindGroup0, wgpu::B
 pub struct InputPoint {
 	pub position: glam::Vec2,
 	pub pressure: f32,
+	pub color: glam::Vec3,
+	pub size: f32,
+	pub softness: f32,
 }
 
 pub struct Airbrush {
@@ -90,8 +93,6 @@ pub struct Airbrush {
 
 pub struct AirbrushDrawable<'tool> {
 	tool: &'tool Airbrush,
-	last_point: InputPoint,
-	point: InputPoint,
 }
 
 impl Airbrush {
@@ -115,12 +116,37 @@ impl Airbrush {
 	pub fn start(&mut self) {
 	}
 
-	pub fn drag(&mut self, point: InputPoint) -> Option<AirbrushDrawable> {
+	pub fn drag(&mut self, queue: &wgpu::Queue, point: InputPoint) -> Option<AirbrushDrawable<'_>> {
 		let last_point = self.last_point.replace(point)?;
+
+		let p0 = last_point.position;
+		let p1 = point.position;
+		let tangent = (p1 - p0).normalize_or(Vec2::X);
+		let normal = tangent.perp();
+		let s0 = last_point.size * last_point.pressure;
+		let s1 = point.size * point.pressure;
+
+		let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
+		contents
+			.write(&AirbrushAction {
+				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
+				color: point.color,
+				pressure: point.pressure,
+				softness:point.softness,
+			})
+			.unwrap();
+		queue.write_buffer(&self.action_buffer, 0, &contents.into_inner());
+
+		let vertices = [
+			p0 - s0 * tangent + s0 * normal,
+			p0 - s0 * tangent - s0 * normal,
+			p1 + s1 * tangent + s1 * normal,
+			p1 + s1 * tangent - s1 * normal,
+		];
+		queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+
 		Some(AirbrushDrawable {
 			tool: self,
-			last_point,
-			point,
 		})
 	}
 
@@ -132,38 +158,8 @@ impl Airbrush {
 impl<'tool> AirbrushDrawable<'tool> {
 	pub fn draw(
 		&self,
-		queue: &wgpu::Queue,
 		render_pass: &mut wgpu::RenderPass<'_>,
-		color: glam::Vec3,
-		size_scale: f32,
-		softness: f32,
 	) {
-		let p0 = self.last_point.position;
-		let p1 = self.point.position;
-		let tangent = (p1 - p0).normalize_or(Vec2::X);
-		let normal = tangent.perp();
-		let s0 = size_scale * self.last_point.pressure;
-		let s1 = size_scale * self.point.pressure;
-
-		let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
-		contents
-			.write(&AirbrushAction {
-				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
-				color,
-				pressure: self.point.pressure,
-				softness,
-			})
-			.unwrap();
-		queue.write_buffer(&self.tool.action_buffer, 0, &contents.into_inner());
-
-		let vertices = [
-			p0 - s0 * tangent + s0 * normal,
-			p0 - s0 * tangent - s0 * normal,
-			p1 + s1 * tangent + s1 * normal,
-			p1 + s1 * tangent - s1 * normal,
-		];
-		queue.write_buffer(&self.tool.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
-
 		render_pass.set_pipeline(&self.tool.pipeline);
 		self.tool.bind_group.set(render_pass);
 		render_pass.set_vertex_buffer(0, self.tool.vertex_buffer.slice(..));
