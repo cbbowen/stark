@@ -70,6 +70,7 @@ pub fn RenderSurface(
 	#[prop(optional, into)] configure: Option<ConfigureCallback>,
 	#[prop(optional, into)] configured: Option<ConfiguredCallback>,
 	#[prop(default = 250.0, into)] min_configure_interval: f64,
+	#[prop(optional, into)] render_size: Option<WriteSignal<(u32, u32)>>,
 ) -> impl IntoView {
 	let context: Arc<WgpuContext> = use_context().unwrap();
 
@@ -126,7 +127,9 @@ pub fn RenderSurface(
 			return;
 		};
 		size.set(Some((width, height)));
-		// size.set(Some((256, 256)));
+		if let Some(render_size) = render_size {
+			render_size.set((width, height));
+		}
 	};
 	StoredValue::new_local(RenderEffect::new(move |_| {
 		if size.get().is_some() {

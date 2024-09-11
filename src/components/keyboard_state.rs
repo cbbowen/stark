@@ -57,6 +57,8 @@ pub fn KeyboardStateProvider(children: Children) -> impl IntoView {
 
 	provide_context(state);
 	view! {
-		{children()}
+		<div tabindex="0" class="Provider">
+			{children()}
+		</div>
 	}
 }

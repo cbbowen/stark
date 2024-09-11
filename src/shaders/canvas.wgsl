@@ -11,7 +11,7 @@ var chart_sampler: sampler;
 var<uniform> canvas_to_view: mat4x4<f32>;
 
 struct VertexOutput {
-	@builtin(position) clip_position: vec4<f32>,
+	@builtin(position) position: vec4<f32>,
 	@location(0) tex_coords: vec2<f32>,
 };
 
@@ -22,8 +22,9 @@ fn vs_main(
 	var out: VertexOutput;
 	let x = f32(vertex_index & 1u);
 	let y = 0.5 * f32(vertex_index & 2u);
-	out.clip_position = canvas_to_view * chart_to_canvas * vec4<f32>(x, y, 0.0, 1.0);
 	out.tex_coords = vec2<f32>(x, y);
+
+	out.position = canvas_to_view * chart_to_canvas * vec4<f32>(x, y, 0.0, 1.0);
 	return out;
 }
 

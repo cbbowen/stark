@@ -38,7 +38,7 @@ pub fn Home() -> impl IntoView {
 
 					<div class="SidePanels">
 
-						<Panel title="Color Picker">
+						<Panel title="Color">
 							<ColorPicker color=brush_color/>
 						</Panel>
 

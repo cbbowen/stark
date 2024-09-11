@@ -3,8 +3,9 @@ use crate::engine::{Airbrush, AirbrushDrawable, InputPoint};
 use crate::render;
 use crate::util::create_local_derived;
 use crate::*;
-use glam::Vec4Swizzles;
+use glam::*;
 use leptos::prelude::*;
+use leptos_use::{use_element_size, UseElementSizeReturn};
 use std::sync::Arc;
 use util::CoordinateSource;
 use util::LocalCallback;
@@ -129,12 +130,15 @@ fn create_canvas_bind_groups(
 
 #[component]
 pub fn Canvas(
-	#[prop(into)] brush_color: Signal<glam::Vec3>,
+	#[prop(into)] brush_color: Signal<Vec3>,
 	#[prop(into)] brush_size: Signal<f64>,
 	#[prop(into)] brush_softness: Signal<f64>,
 ) -> impl IntoView {
 	let context: Arc<WgpuContext> = use_context().unwrap();
 	let resources: Arc<render::Resources> = use_context().unwrap();
+
+	let node_ref = NodeRef::new();
+	let UseElementSizeReturn { width, height } = use_element_size(node_ref);
 
 	let canvas_sampler = create_canvas_sampler(context.device());
 
@@ -157,11 +161,23 @@ pub fn Canvas(
 		})
 	};
 
-	let canvas_to_view = RwSignal::new(glam::Mat4::from_scale_rotation_translation(
-		glam::Vec3::new(2.0, 2.0, 1.0),
-		glam::Quat::IDENTITY,
-		glam::Vec3::new(-1.0, -1.0, 0.0),
+	let canvas_to_screen = RwSignal::new(Mat4::from_scale_rotation_translation(
+		Vec3::new(4096.0, 4096.0, 1.0),
+		Quat::IDENTITY,
+		Vec3::new(-2048.0, -2048.0, 0.0),
 	));
+
+	// This is the mapping from normalized device coordinates to framebuffer coordinates.
+	// Equivalently, it transforms `@builtin(position)` from the vertex to the fragment shader.
+	let view_to_screen = create_local_derived(move || {
+		let scale = 0.5 * vec2(width.get() as f32, height.get() as f32);
+		let scale = vec3(scale.x, scale.y, 1.0);
+		Mat4::from_scale(scale) * Mat4::from_translation(vec3(1.0, 1.0, 0.0)) * Mat4::from_scale(vec3(1.0, -1.0, 1.0))
+	});
+
+	let screen_to_view = create_local_derived(move || view_to_screen.get().inverse());
+
+	let canvas_to_view = create_local_derived(move || screen_to_view.get() * canvas_to_screen.get());
 
 	let redraw_trigger = ArcTrigger::new();
 
@@ -279,37 +295,45 @@ pub fn Canvas(
 				return;
 			}
 
+			let screen_to_canvas = canvas_to_screen.get_untracked().inverse();
+
+			let movement = {
+				let screen_movement = e.pixel_movement();
+				let movement = screen_to_canvas * vec4(screen_movement.x, screen_movement.y, 0f32, 0f32);
+				movement.xy()
+			};
+
+			let position = {
+				let screen_position = e.pixel_position();
+				let position = screen_to_canvas * vec4(screen_position.x, screen_position.y, 0f32, 1f32);
+				tracing::trace!(?screen_position, ?position, "pointermove");
+				position.xy()
+			};
+
 			// Pan.
 			if keys.is_pressed(" ") {
-				if let Some(movement) = e.target_movement() {
-					canvas_to_view.update(|mat| {
-						*mat =
-							glam::Mat4::from_translation(glam::vec3(movement.x, movement.y, 0.0)) * *mat;
-					})
-				}
+				tracing::trace!(?movement, "pointermove");
+				canvas_to_screen.update(|m| {
+					*m = (*m) * Mat4::from_translation(vec3(movement.x, movement.y, 0.0));
+				});
 				return;
 			}
 
 			// Draw.
-			if let Some(position) = e.target_position() {
-				let mut airbrush: std::cell::RefMut<_> = (*airbrush).borrow_mut();
+			let mut airbrush: std::cell::RefMut<_> = (*airbrush).borrow_mut();
 
-				let pressure = e.pressure();
-				let canvas_to_view = canvas_to_view.get();
-				let view_to_canvas = canvas_to_view.inverse();
-				let position = view_to_canvas * glam::vec4(position.x, position.y, 0.0, 1.0);
-				let position = position.xy();
-				let input_point = InputPoint {
-					position,
-					pressure,
-					color: brush_color.get_untracked(),
-					size: brush_size.get_untracked() as f32,
-					softness: brush_softness.get_untracked() as f32,
-				};
-				if let Some(drawable) = airbrush.drag(context.queue(), input_point) {
-					draw(drawable);
-				}
+			let pressure = e.pressure();
+			tracing::trace!(?position, "pointermove");
+			let input_point = InputPoint {
+				position,
+				pressure,
+				color: brush_color.get_untracked(),
+				size: brush_size.get_untracked() as f32,
+				softness: brush_softness.get_untracked() as f32,
 			};
+			if let Some(drawable) = airbrush.drag(context.queue(), input_point) {
+				draw(drawable);
+			}
 		}
 	};
 
@@ -339,7 +363,7 @@ pub fn Canvas(
 	let configured = LocalCallback::new(configured);
 
 	view! {
-		<div class="Canvas">
+		<div class="Canvas" node_ref=node_ref>
 			<RenderSurface
 				render=render
 				configured=configured
