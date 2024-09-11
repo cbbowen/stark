@@ -18,8 +18,9 @@ pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
 
 #[component]
 pub fn Home() -> impl IntoView {
-	let drawing_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
+	let brush_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
 	let brush_size = RwSignal::new(0.5);
+	let brush_softness = RwSignal::new(1.0);
 
 	view! {
 		<Title text="Home"/>
@@ -29,29 +30,58 @@ pub fn Home() -> impl IntoView {
 			}>
 				<ShaderModulesProvider>
 
-					<Canvas drawing_color=drawing_color brush_size=brush_size/>
+					<Canvas
+						brush_color=brush_color
+						brush_size=brush_size
+						brush_softness=brush_softness
+					/>
 
-					<Card class="ColorPickerCard">
-						<CardHeader>
-							<thaw::Body1>
-								<b>"Color Picker"</b>
-							</thaw::Body1>
-						</CardHeader>
-						<CardPreview>
-							<ColorPicker color=drawing_color/>
-						</CardPreview>
-					</Card>
+					<div class="SidePanel">
 
-					<Card class="BrushSizeCard">
-						<CardHeader>
-							<thaw::Body1>
-								<b>"Brush Size"</b>
-							</thaw::Body1>
-						</CardHeader>
-						<CardPreview>
-							<thaw::Slider value=brush_size min=0.01 max=1.0 step=0.05/>
-						</CardPreview>
-					</Card>
+						<Card class="ColorPickerCard">
+							<CardHeader>
+								<thaw::Body1>
+									<b>"Color Picker"</b>
+								</thaw::Body1>
+							</CardHeader>
+							<CardPreview>
+								<ColorPicker color=brush_color/>
+							</CardPreview>
+						</Card>
+
+						<Card class="BrushSizeCard">
+							<CardHeader>
+								<thaw::Body1>
+									<b>"Brush Size"</b>
+								</thaw::Body1>
+							</CardHeader>
+							<CardPreview>
+								<thaw::Slider
+									value=brush_size
+									min=0.01
+									max=1.0
+									step=0.05
+								></thaw::Slider>
+							</CardPreview>
+						</Card>
+
+						<Card class="SoftnessCard">
+							<CardHeader>
+								<thaw::Body1>
+									<b>"Brush Softness"</b>
+								</thaw::Body1>
+							</CardHeader>
+							<CardPreview>
+								<thaw::Slider
+									value=brush_softness
+									min=0.1
+									max=4.0
+									step=0.1
+								></thaw::Slider>
+							</CardPreview>
+						</Card>
+
+					</div>
 
 				</ShaderModulesProvider>
 			</RenderContextProvider>

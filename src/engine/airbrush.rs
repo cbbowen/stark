@@ -112,8 +112,7 @@ impl Airbrush {
 		}
 	}
 
-	pub fn start(&mut self, point: InputPoint) {
-		self.last_point = Some(point);
+	pub fn start(&mut self) {
 	}
 
 	pub fn drag(&mut self, point: InputPoint) -> Option<AirbrushDrawable> {
@@ -125,7 +124,7 @@ impl Airbrush {
 		})
 	}
 
-	pub fn stop(&mut self, _point: InputPoint) {
+	pub fn stop(&mut self) {
 		self.last_point = None;
 	}
 }
@@ -137,6 +136,7 @@ impl<'tool> AirbrushDrawable<'tool> {
 		render_pass: &mut wgpu::RenderPass<'_>,
 		color: glam::Vec3,
 		size_scale: f32,
+		softness: f32,
 	) {
 		let p0 = self.last_point.position;
 		let p1 = self.point.position;
@@ -151,6 +151,7 @@ impl<'tool> AirbrushDrawable<'tool> {
 				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
 				color,
 				pressure: self.point.pressure,
+				softness,
 			})
 			.unwrap();
 		queue.write_buffer(&self.tool.action_buffer, 0, &contents.into_inner());

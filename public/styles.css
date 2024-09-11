@@ -16,11 +16,17 @@ body {
 	cursor: crosshair;
 }
 
-.ColorPickerCard {
+.SidePanel {
+	display: flex;
+	flex-flow: column nowrap;
 	position: absolute;
 	top: 20px;
 	right: 20px;
+	gap: 20px;
 	width: 300px; 
+}
+
+.ColorPickerCard {
 }
 
 .ColorPicker {
@@ -50,10 +56,6 @@ body {
 }
 
 .BrushSizeCard {
-	position: absolute;
-	top: 420px;
-	right: 20px;
-	width: 300px; 
 }
 
 .thaw-card-preview {

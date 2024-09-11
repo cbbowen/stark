@@ -128,7 +128,11 @@ fn create_canvas_bind_groups(
 }
 
 #[component]
-pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>, #[prop(into)] brush_size: Signal<f64>) -> impl IntoView {
+pub fn Canvas(
+	#[prop(into)] brush_color: Signal<glam::Vec3>,
+	#[prop(into)] brush_size: Signal<f64>,
+	#[prop(into)] brush_softness: Signal<f64>,
+) -> impl IntoView {
 	let context: Arc<WgpuContext> = use_context().unwrap();
 	let resources: Arc<render::Resources> = use_context().unwrap();
 
@@ -231,7 +235,7 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>, #[prop(into)] bru
 	let draw = {
 		let context = context.clone();
 		let canvas_texture_view = Arc::new(canvas_texture_view);
-		move |drawable: AirbrushDrawable, color: glam::Vec3, brush_size: f64| {
+		move |drawable: AirbrushDrawable, color: glam::Vec3, size: f32, softness: f32| {
 			let mut encoder =
 				context
 					.device()
@@ -255,7 +259,13 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>, #[prop(into)] bru
 					],
 					..Default::default()
 				});
-				drawable.draw(context.queue(), &mut render_pass, color, brush_size as f32);
+				drawable.draw(
+					context.queue(),
+					&mut render_pass,
+					color,
+					size,
+					softness,
+				);
 			}
 			context.queue().submit(std::iter::once(encoder.finish()));
 			redraw_trigger.notify();
@@ -296,18 +306,34 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>, #[prop(into)] bru
 				let position = view_to_canvas * glam::vec4(position.x, position.y, 0.0, 1.0);
 				let position = position.xy();
 				if let Some(drawable) = airbrush.drag(InputPoint { position, pressure }) {
-					draw(drawable, drawing_color.get_untracked(), brush_size.get_untracked());
+					draw(
+						drawable,
+						brush_color.get_untracked(),
+						brush_size.get_untracked() as f32,
+						brush_softness.get_untracked() as f32,
+					);
 				}
 			};
 		}
 	};
 
 	let pointerdown = {
+		let airbrush = airbrush.clone();
 		let pointermove = pointermove.clone();
 		move |e: leptos::ev::PointerEvent| {
+			(*airbrush).borrow_mut().start();
+
 			e.set_pointer_capture();
 			e.prevent_default();
 			pointermove(e);
+		}
+	};
+
+	let pointerup = {
+		let airbrush = airbrush.clone();
+		move |e: leptos::ev::PointerEvent| {
+			(*airbrush).borrow_mut().stop();
+			e.prevent_default();
 		}
 	};
 
@@ -324,6 +350,7 @@ pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>, #[prop(into)] bru
 				on:touchstart=touchstart
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
+				on:pointerup=pointerup
 			/>
 		</div>
 	}
