@@ -5,7 +5,7 @@ use leptos::prelude::*;
 use leptos_meta::*;
 use leptos_router::components::A;
 use std::sync::Arc;
-use thaw::{Card, CardHeader, CardPreview};
+use thaw::Body1;
 
 #[component]
 pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
@@ -36,50 +36,30 @@ pub fn Home() -> impl IntoView {
 						brush_softness=brush_softness
 					/>
 
-					<div class="SidePanel">
+					<div class="SidePanels">
 
-						<Card class="ColorPickerCard">
-							<CardHeader>
-								<thaw::Body1>
-									<b>"Color Picker"</b>
-								</thaw::Body1>
-							</CardHeader>
-							<CardPreview>
-								<ColorPicker color=brush_color/>
-							</CardPreview>
-						</Card>
+						<Panel title="Color Picker">
+							<ColorPicker color=brush_color/>
+						</Panel>
 
-						<Card class="BrushSizeCard">
-							<CardHeader>
-								<thaw::Body1>
-									<b>"Brush Size"</b>
-								</thaw::Body1>
-							</CardHeader>
-							<CardPreview>
+						<Panel title="Brush">
+							<BrushSetting name="Size">
 								<thaw::Slider
 									value=brush_size
 									min=0.01
 									max=1.0
 									step=0.05
-								></thaw::Slider>
-							</CardPreview>
-						</Card>
-
-						<Card class="SoftnessCard">
-							<CardHeader>
-								<thaw::Body1>
-									<b>"Brush Softness"</b>
-								</thaw::Body1>
-							</CardHeader>
-							<CardPreview>
+								/>
+							</BrushSetting>
+							<BrushSetting name="Softness">
 								<thaw::Slider
 									value=brush_softness
 									min=0.1
 									max=4.0
-									step=0.1
-								></thaw::Slider>
-							</CardPreview>
-						</Card>
+									step=0.2
+								/>
+							</BrushSetting>
+						</Panel>
 
 					</div>
 

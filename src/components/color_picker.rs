@@ -98,7 +98,6 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 				.write_buffer(&buffer, 0, bytemuck::cast_slice(&[lightness as f32]));
 
 			let callback = move |view: wgpu::TextureView| {
-				tracing::trace!("ColorPicker::render::callback");
 				let Some(render_pipeline) = render_pipeline.as_ref() else { return };
 				let mut encoder =
 					context
