@@ -1,7 +1,8 @@
-use crate::{util::*, WgpuContext};
+use crate::WgpuContext;
 use leptos::children::ChildrenFn;
 use leptos::context::Provider;
 use leptos::prelude::*;
+use std::sync::Arc;
 
 /// Unconditionally provides a `render::Context` context to its descendants. All `RenderCanvas`'s
 /// should have this as an ancestor.
@@ -9,10 +10,9 @@ use leptos::prelude::*;
 pub fn RenderContextProvider(
 	#[prop(optional, into)] initializing_fallback: ViewFnOnce,
 	children: ChildrenFn,
-) -> impl IntoView
-{
-	let resource = async { YoloValue::new(WgpuContext::new().await.unwrap()) };
-	let resource = LocalResource::new(yolo_fn_once_to_fn(move || resource));
+) -> impl IntoView {
+	let resource =
+		LocalResource::new(|| async { Arc::new(WgpuContext::new().await.unwrap()) });
 
 	view! {
 		<Suspense fallback=initializing_fallback>
@@ -24,6 +24,7 @@ pub fn RenderContextProvider(
 					view! { <Provider value=resource>{children()}</Provider> }
 				})
 			}}
+
 		</Suspense>
 	}
 }

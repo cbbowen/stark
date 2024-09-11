@@ -72,7 +72,7 @@ pub fn RenderSurface(
 	#[prop(optional, into)] configured: Option<ConfiguredCallback>,
 	#[prop(default = 250.0, into)] min_configure_interval: f64,
 ) -> impl IntoView {
-	let context: Arc<WgpuContext> = use_yolo_context();
+	let context: Arc<WgpuContext> = use_context().unwrap();
 
 	let node_ref = node_ref.unwrap_or_else(NodeRef::new);
 

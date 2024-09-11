@@ -10,8 +10,8 @@ use crate::util::*;
 
 #[component]
 pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
-	let context: Arc<WgpuContext> = use_yolo_context();
-	let resources = YoloValue::new(render::Resources::new(context.device()));
+	let context: Arc<WgpuContext> = use_context().unwrap();
+	let resources = Arc::new(render::Resources::new(context.device()));
 	
 	use leptos::context::Provider;
 	view! {

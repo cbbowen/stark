@@ -6,9 +6,7 @@ use encase::ShaderType;
 use glam::Vec4Swizzles;
 use leptos::prelude::*;
 use util::SetExt;
-use crate::util::use_yolo_context;
 use util::LocalCallback;
-use std::rc::Rc;
 use std::sync::Arc;
 use util::CoordinateSource;
 use util::PointerCapture;
@@ -191,8 +189,8 @@ fn create_drawing_pipeline(
 
 #[component]
 pub fn Canvas(#[prop(into)] drawing_color: Signal<glam::Vec3>) -> impl IntoView {
-	let context: Arc<WgpuContext> = use_yolo_context();
-	let resources: Arc<render::Resources> = use_yolo_context();
+	let context: Arc<WgpuContext> = use_context().unwrap();
+	let resources: Arc<render::Resources> = use_context().unwrap();
 
 	let canvas_sampler = create_canvas_sampler(context.device());
 

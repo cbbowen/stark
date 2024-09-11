@@ -35,7 +35,7 @@ impl<T> std::ops::Index<usize> for StableVec<T> {
 	type Output = T;
 	fn index(&self, index: usize) -> &Self::Output {
 		let vec = self.vec.borrow();
-		let r: &T = vec[index].deref();
+		let r: &T = &vec[index];
 		// SAFETY: `r` remains pinned for the lifetime of `self`.
 		unsafe { std::mem::transmute(r) }
 	}
@@ -287,8 +287,7 @@ where
 		let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
 		contents.write(&data).unwrap();
 
-		let pool = self.pool.deref();
-		let context = &pool.context;
+		let context = &self.pool.context;
 		let offset = self.get_buffer_offset();
 
 		context.queue().write_buffer(
@@ -318,7 +317,7 @@ where
 		let destination = pool.clone().allocate_tile();
 		let destination_block = destination.get_block();
 
-		let context = pool.context.deref();
+		let context = &*pool.context;
 		let queue = context.queue();
 		let mut encoder = context
 			.device()
@@ -344,8 +343,7 @@ where
 
 impl<Data> Drop for Tile<Data> {
 	fn drop(&mut self) {
-		let pool = self.pool.deref();
-		pool.release_index(self.index);
+		self.pool.release_index(self.index);
 	}
 }
 

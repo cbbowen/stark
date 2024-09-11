@@ -19,9 +19,6 @@ use leptos::prelude::*;
 mod result_ext;
 pub use result_ext::*;
 
-mod yolo;
-pub use yolo::*;
-
 mod leptos_try;
 pub use leptos_try::*;
 
@@ -75,7 +72,7 @@ pub fn create_local_derived<T: Clone + 'static>(f: impl Fn() -> T + 'static) -> 
 	let f= SendWrapper::new(f);
 	let f = move || f();
 	let memo = Memo::new_owning(move |_| (Unequal(SendWrapper::new(f())), true));
-	Signal::derive_local(move || memo.with(|m| m.0.deref().clone()))
+	Signal::derive_local(move || memo.with(|m| (*m.0).clone()))
 }
 
 pub struct LocalCallback<In: 'static, Out: 'static = ()>(
