@@ -296,9 +296,9 @@ pub fn Canvas(
 	let pointermove = {
 		let airbrush = airbrush.clone();
 		move |e: leptos::ev::PointerEvent| {
-			if e.buttons() & 1 == 0 {
-				return;
-			}
+			let button0 = e.buttons() & 1 != 0;
+			let button1 = e.buttons() & 2 != 0;
+			let button2 = e.buttons() & 4 != 0;
 
 			let screen_to_canvas = screen_to_canvas.get_untracked();
 
@@ -317,7 +317,7 @@ pub fn Canvas(
 			};
 
 			// Pan.
-			if keys.is_pressed(" ") {
+			if (button0 && keys.is_pressed(" ")) || button2 {
 				canvas_to_screen.update(|m| {
 					*m = (*m) * Mat4::from_translation(vec3(movement.x, movement.y, 0.0));
 				});
@@ -325,19 +325,21 @@ pub fn Canvas(
 			}
 
 			// Draw.
-			let mut airbrush: std::cell::RefMut<_> = (*airbrush).borrow_mut();
+			if button0 {
+				let mut airbrush: std::cell::RefMut<_> = (*airbrush).borrow_mut();
 
-			let pressure = e.pressure();
-			let input_point = InputPoint {
-				position,
-				pressure,
-				color: brush_color.get_untracked(),
-				size: brush_size.get_untracked() as f32,
-				opacity: brush_opacity.get_untracked() as f32,
-				softness: brush_softness.get_untracked() as f32,
-			};
-			if let Some(drawable) = airbrush.drag(context.queue(), input_point) {
-				draw(drawable);
+				let pressure = e.pressure();
+				let input_point = InputPoint {
+					position,
+					pressure,
+					color: brush_color.get_untracked(),
+					size: brush_size.get_untracked() as f32,
+					opacity: brush_opacity.get_untracked() as f32,
+					softness: brush_softness.get_untracked() as f32,
+				};
+				if let Some(drawable) = airbrush.drag(context.queue(), input_point) {
+					draw(drawable);
+				}
 			}
 		}
 	};
