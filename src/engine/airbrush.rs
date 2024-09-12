@@ -80,6 +80,7 @@ pub struct InputPoint {
 	pub pressure: f32,
 	pub color: glam::Vec3,
 	pub size: f32,
+	pub opacity: f32,
 	pub softness: f32,
 }
 
@@ -132,6 +133,7 @@ impl Airbrush {
 				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
 				color: point.color,
 				pressure: point.pressure,
+				opacity: point.opacity,
 				softness:point.softness,
 			})
 			.unwrap();

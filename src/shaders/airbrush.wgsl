@@ -4,6 +4,7 @@ struct AirbrushAction {
 	seed: vec2<f32>,
 	color: vec3<f32>,
 	pressure: f32,
+	opacity: f32,
 	softness: f32,
 };
 @group(0) @binding(0)
@@ -36,7 +37,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let c = in.tex_coords;
 
     let opacity_noise = dither1(in.clip_position.xy + action.seed) / 8.0;
-    let opacity = max(0.0, (sqrt(action.pressure) + opacity_noise) * 0.05);
+    let opacity = max(0.0, action.opacity * (sqrt(action.pressure) + opacity_noise));
     let alpha = opacity * pow(max(0.0, 1.0 - dot(c, c)), action.softness);
 
     let color = action.color + dither3(in.clip_position.xy + action.seed) / 128;
