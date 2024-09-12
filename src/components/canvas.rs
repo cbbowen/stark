@@ -173,12 +173,16 @@ pub fn Canvas(
 	let view_to_screen = create_local_derived(move || {
 		let scale = 0.5 * vec2(width.get() as f32, height.get() as f32);
 		let scale = vec3(scale.x, scale.y, 1.0);
-		Mat4::from_scale(scale) * Mat4::from_translation(vec3(1.0, 1.0, 0.0)) * Mat4::from_scale(vec3(1.0, -1.0, 1.0))
+		Mat4::from_scale(scale)
+			* Mat4::from_translation(vec3(1.0, 1.0, 0.0))
+			* Mat4::from_scale(vec3(1.0, -1.0, 1.0))
 	});
 
 	let screen_to_view = create_local_derived(move || view_to_screen.get().inverse());
 
 	let canvas_to_view = create_local_derived(move || screen_to_view.get() * canvas_to_screen.get());
+
+	let screen_to_canvas = create_local_derived(move || canvas_to_screen.get().inverse());
 
 	let redraw_trigger = ArcTrigger::new();
 
@@ -296,24 +300,24 @@ pub fn Canvas(
 				return;
 			}
 
-			let screen_to_canvas = canvas_to_screen.get_untracked().inverse();
+			let screen_to_canvas = screen_to_canvas.get_untracked();
 
 			let movement = {
 				let screen_movement = e.pixel_movement();
-				let movement = screen_to_canvas * vec4(screen_movement.x, screen_movement.y, 0f32, 0f32);
+				let movement =
+					screen_to_canvas * vec4(screen_movement.x, screen_movement.y, 0f32, 0f32);
 				movement.xy()
 			};
 
 			let position = {
 				let screen_position = e.pixel_position();
-				let position = screen_to_canvas * vec4(screen_position.x, screen_position.y, 0f32, 1f32);
-				tracing::trace!(?screen_position, ?position, "pointermove");
+				let position =
+					screen_to_canvas * vec4(screen_position.x, screen_position.y, 0f32, 1f32);
 				position.xy()
 			};
 
 			// Pan.
 			if keys.is_pressed(" ") {
-				tracing::trace!(?movement, "pointermove");
 				canvas_to_screen.update(|m| {
 					*m = (*m) * Mat4::from_translation(vec3(movement.x, movement.y, 0.0));
 				});
@@ -324,7 +328,6 @@ pub fn Canvas(
 			let mut airbrush: std::cell::RefMut<_> = (*airbrush).borrow_mut();
 
 			let pressure = e.pressure();
-			tracing::trace!(?position, "pointermove");
 			let input_point = InputPoint {
 				position,
 				pressure,
@@ -359,6 +362,26 @@ pub fn Canvas(
 		}
 	};
 
+	let wheel = move |e: leptos::ev::WheelEvent| {
+		let screen_to_canvas = screen_to_canvas.get_untracked();
+		let position = {
+			let screen_position = e.pixel_position();
+			let position = screen_to_canvas * vec4(screen_position.x, screen_position.y, 0f32, 1f32);
+			position.xy()
+		};
+		let translation = vec3(position.x, position.y, 0.0);
+
+		let mut scale = 1.272;
+		if e.delta_y() > 0.0 {
+			scale = 1.0 / scale;
+		}
+		let transform = Mat4::from_translation(translation)
+			* Mat4::from_scale(vec3(scale, scale, 1.0))
+			* Mat4::from_translation(-translation);
+		canvas_to_screen.update(|m| *m = (*m) * transform);
+		e.prevent_default();
+	};
+
 	let configured = move |configuration: wgpu::SurfaceConfiguration| {
 		set_surface_texture_format.try_set_or_log(Some(configuration.format));
 	};
@@ -373,6 +396,7 @@ pub fn Canvas(
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
 				on:pointerup=pointerup
+				on:wheel=wheel
 			/>
 		</div>
 	}

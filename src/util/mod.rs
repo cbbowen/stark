@@ -200,6 +200,26 @@ impl CoordinateSource for leptos::ev::PointerEvent {
 	}
 }
 
+impl CoordinateSource for leptos::ev::WheelEvent {
+	fn size(&self) -> Option<glam::Vec2> {
+		let element = self
+			.current_target()
+			.and_then(|target| target.dyn_into::<web_sys::Element>().ok_or_log())?;
+		Some(glam::vec2(
+			element.client_width() as f32,
+			element.client_height() as f32,
+		))
+	}
+
+	fn pixel_position(&self) -> glam::Vec2 {
+		glam::vec2(self.offset_x() as f32, self.offset_y() as f32)
+	}
+
+	fn pixel_movement(&self) -> glam::Vec2 {
+		glam::vec2(self.movement_x() as f32, self.movement_y() as f32)
+	}
+}
+
 pub trait QueueExt {
 	fn fill_texture_layer(&self, texture: &wgpu::Texture, pixel_data: &[u8], layer_index: u32);
 	fn fill_texture(&self, texture: &wgpu::Texture, pixel_data: &[u8]) {
