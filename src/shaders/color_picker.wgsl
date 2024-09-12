@@ -46,6 +46,8 @@ fn step(condition: bool, size: f32) -> f32 {
 	return -size;
 }
 
+override proof: bool = true;
+
 // Scales chroma to produce a valid sRGB color.
 fn constrained_oklab_to_linear_srgb(L: f32, ab: vec2<f32>) -> vec3<f32> {
 	var s = 0.5;
@@ -60,5 +62,9 @@ fn constrained_oklab_to_linear_srgb(L: f32, ab: vec2<f32>) -> vec3<f32> {
 
 	// Final step with the same step size. This allows us to reach 1.0.
 	s = s + step(valid_color(r), step_size);
-	return oklab_to_linear_srgb(vec3(L, s * ab));
+	var proof_factor = 0.0;
+	if proof {
+		proof_factor = pow(1.0 - s, 0.25);
+	}
+	return mix(oklab_to_linear_srgb(vec3(L, s * ab)), 0.25 * vec3(1.0 - L), proof_factor);
 }

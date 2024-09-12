@@ -1,5 +1,5 @@
 use super::render_surface;
-use crate::shaders::color_picker::*;
+use crate::shaders::{self, color_picker::*};
 use crate::util::*;
 use crate::{render, WgpuContext};
 use leptos::prelude::*;
@@ -42,7 +42,7 @@ fn create_render_pipeline(
 				format: texture_format,
 				blend: Some(wgpu::BlendState::REPLACE),
 				write_mask: wgpu::ColorWrites::ALL,
-			})]),
+			})], &OverrideConstants { proof: None }),
 		)),
 		primitive: wgpu::PrimitiveState {
 			topology: wgpu::PrimitiveTopology::TriangleStrip,
