@@ -14,10 +14,10 @@ fn oklab_to_linear_srgb(lab: vec3<f32>) -> vec3<f32> {
 }
 
 fn linear_srgb_to_rgb(srgb: vec3<f32>) -> vec3<f32> {
-	return vec3(gamma(srgb.x), gamma(srgb.y), gamma(srgb.z));
+	return vec3(srgb_gamma(srgb.x), srgb_gamma(srgb.y), srgb_gamma(srgb.z));
 }
 
-fn gamma(x: f32) -> f32 {
+fn srgb_gamma(x: f32) -> f32 {
 	if x >= 0.0031308 {
 		return 1.055 * pow(x, 1 / 2.4) - 0.055;
 	 }

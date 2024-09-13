@@ -20,6 +20,9 @@ pub use result_ext::*;
 mod leptos_try;
 pub use leptos_try::*;
 
+mod oklab;
+pub use oklab::*;
+
 use leptos::wasm_bindgen;
 use leptos::web_sys;
 use wasm_bindgen::JsCast;

@@ -6,6 +6,7 @@ use leptos::prelude::*;
 use leptos::{component, view, IntoView};
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
+use itertools::Itertools;
 
 fn create_bind_group(device: &wgpu::Device) -> (bind_groups::BindGroup0, wgpu::Buffer) {
 	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -38,11 +39,14 @@ fn create_render_pipeline(
 		},
 		fragment: Some(fragment_state(
 			&shader.module,
-			&fs_main_entry([Some(wgpu::ColorTargetState {
-				format: texture_format,
-				blend: Some(wgpu::BlendState::REPLACE),
-				write_mask: wgpu::ColorWrites::ALL,
-			})], &OverrideConstants { proof: None }),
+			&fs_main_entry(
+				[Some(wgpu::ColorTargetState {
+					format: texture_format,
+					blend: Some(wgpu::BlendState::REPLACE),
+					write_mask: wgpu::ColorWrites::ALL,
+				})],
+				&OverrideConstants { proof: None },
+			),
 		)),
 		primitive: wgpu::PrimitiveState {
 			topology: wgpu::PrimitiveTopology::TriangleStrip,
@@ -98,7 +102,9 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 				.write_buffer(&buffer, 0, bytemuck::cast_slice(&[lightness as f32]));
 
 			let callback = move |view: wgpu::TextureView| {
-				let Some(render_pipeline) = render_pipeline.as_ref() else { return };
+				let Some(render_pipeline) = render_pipeline.as_ref() else {
+					return;
+				};
 				let mut encoder =
 					context
 						.device()
@@ -158,6 +164,28 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 	};
 	let configured = LocalCallback::new(configured);
 
+	let style = move || {
+		let fractions = (0..=10).map(|i| i as f32 * 0.1);
+		let color = color.get();
+		let colors = fractions.clone().map(|l| oklab_to_rgb(glam::vec3(l, color.y, color.z)));
+		let colors = colors.map(|c| {
+			format!(
+				"rgb({},{},{})",
+				(c.x.clamp(0.0, 1.0) * 255.5) as u8,
+				(c.y.clamp(0.0, 1.0) * 255.5) as u8,
+				(c.z.clamp(0.0, 1.0) * 255.5) as u8,
+			)
+		});
+		let mut gradient_percents = colors
+			.into_iter()
+			.zip(fractions.into_iter())
+			.map(|(c, l)| format!("{} {}%", c, l * 100.0));
+		format!(
+			"background-image: linear-gradient(to right, {});",
+			gradient_percents.join(", ")
+		)
+	};
+
 	view! {
 		<div class="ColorPicker">
 			<render_surface::RenderSurface
@@ -174,6 +202,7 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 				max="1"
 				step="0.001"
 				prop:value=lightness
+				style=style
 				on:input=move |ev| { set_lightness(event_target_value(&ev).parse().unwrap()) }
 			/>
 		</div>
