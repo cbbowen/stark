@@ -194,7 +194,18 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 				on:touchstart=touchstart
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
-			></render_surface::RenderSurface>
+			/>
+
+			<svg class="ColorPickerOverlay" width="300" height="300">
+				<g
+				transform="scale(300, 300)
+				           translate(0.5, 0.5)
+				           scale(0.5263, 0.5263)
+							  translate(-0.09, -0.24)">
+					<line x1="-1" y1="-1" x2="1" y2="1" stroke="gray" stroke-width="0.01"/>
+					<line x1="1" y1="-1" x2="-1" y2="1" stroke="gray" stroke-width="0.01"/>
+				</g>
+			</svg>
 
 			<input
 				type="range"
