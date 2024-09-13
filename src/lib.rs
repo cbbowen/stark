@@ -24,8 +24,10 @@ use leptos_router::*;
 pub fn App() -> impl IntoView {
 	provide_meta_context();
 
+	let theme = RwSignal::new(thaw::Theme::dark());
+
 	view! {
-		<thaw::ConfigProvider>
+		<thaw::ConfigProvider theme=theme>
 			<Router>
 				<Routes fallback=pages::NotFound>
 					// TODO: Figure out best to handle routes. When deployed on Github pages, this will be under /stark, but when testing locally with trunk, it won't.

@@ -1,7 +1,7 @@
 use crate::components::*;
 use crate::engine::{Airbrush, AirbrushDrawable, InputPoint};
 use crate::render;
-use crate::util::create_local_derived;
+use crate::util::{color_from_css_string, create_local_derived};
 use crate::*;
 use glam::*;
 use leptos::prelude::*;
@@ -200,6 +200,8 @@ pub fn Canvas(
 			let canvas_to_view_buffer = canvas_to_view_buffer.clone();
 			let render_pipeline = render_pipeline.get();
 			let canvas_to_view = canvas_to_view.get();
+			let background_color = thaw::Theme::use_rw_theme()
+				.with(|theme| color_from_css_string(&theme.color.color_neutral_background_static));
 			let callback = move |view: wgpu::TextureView| {
 				let Some(render_pipeline) = render_pipeline.clone() else {
 					return;
@@ -228,10 +230,10 @@ pub fn Canvas(
 								resolve_target: None,
 								ops: wgpu::Operations {
 									load: wgpu::LoadOp::Clear(wgpu::Color {
-										r: 0.4,
-										g: 0.3,
-										b: 0.2,
-										a: 1.0,
+										r: background_color.x as f64,
+										g: background_color.y as f64,
+										b: background_color.z as f64,
+										a: background_color.w as f64,
 									}),
 									store: wgpu::StoreOp::Store,
 								},

@@ -466,6 +466,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
 
 [[package]]
+name = "csscolorparser"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46f9a16a848a7fb95dd47ce387ac1ee9a6df879ba784b815537fcd388a1a8288"
+dependencies = [
+ "phf",
+]
+
+[[package]]
 name = "d3d12"
 version = "22.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2261,6 +2270,7 @@ dependencies = [
  "async-once-cell",
  "bytemuck",
  "console_error_panic_hook",
+ "csscolorparser",
  "encase",
  "fastrand",
  "futures",

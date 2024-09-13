@@ -310,3 +310,12 @@ where
 		func,
 	)
 }
+
+pub fn try_color_from_css_string(name: &str) -> Option<glam::Vec4> {
+	let color = csscolorparser::parse(name).ok_or_log()?;
+	Some(glam::vec4(color.r, color.g, color.b, color.a))
+}
+
+pub fn color_from_css_string(name: &str) -> glam::Vec4 {
+	try_color_from_css_string(name).unwrap_or(glam::Vec4::ZERO)
+}
