@@ -42,7 +42,10 @@ impl WgpuContext {
 			.request_device(
 				&wgpu::DeviceDescriptor {
 					required_features: wgpu::Features::default()
-						| wgpu::Features::INDIRECT_FIRST_INSTANCE,
+						| wgpu::Features::INDIRECT_FIRST_INSTANCE
+						// | wgpu::Features::ADDRESS_MODE_CLAMP_TO_ZERO
+						,
+					
 					..Default::default()
 				},
 				None,

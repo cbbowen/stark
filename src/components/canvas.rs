@@ -133,7 +133,7 @@ pub fn Canvas(
 	#[prop(into)] brush_color: Signal<Vec3>,
 	#[prop(into)] brush_size: Signal<f64>,
 	#[prop(into)] brush_opacity: Signal<f64>,
-	#[prop(into)] brush_softness: Signal<f64>,
+	#[prop(into)] brush_hardness: Signal<f64>,
 ) -> impl IntoView {
 	let context: Arc<WgpuContext> = use_context().unwrap();
 	let resources: Arc<render::Resources> = use_context().unwrap();
@@ -252,7 +252,7 @@ pub fn Canvas(
 		})
 	};
 
-	let airbrush = Airbrush::new(context.device(), &resources, canvas_texture_format);
+	let airbrush = Airbrush::new(context.device(), context.queue(), &resources, canvas_texture_format);
 	let airbrush = std::rc::Rc::new(std::cell::RefCell::new(airbrush));
 
 	let draw = {
@@ -337,7 +337,7 @@ pub fn Canvas(
 					color: brush_color.get_untracked(),
 					size: brush_size.get_untracked() as f32,
 					opacity: brush_opacity.get_untracked() as f32,
-					softness: brush_softness.get_untracked() as f32,
+					hardness: brush_hardness.get_untracked() as f32,
 				};
 				if let Some(drawable) = airbrush.drag(context.queue(), input_point) {
 					draw(drawable);

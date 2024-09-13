@@ -209,8 +209,8 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 
 			<input
 				type="range"
-				min="0"
-				max="1"
+				min="0.001"
+				max="0.999"
 				step="0.001"
 				prop:value=lightness
 				style=style

@@ -19,9 +19,9 @@ pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
 #[component]
 pub fn Home() -> impl IntoView {
 	let brush_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
-	let brush_size = RwSignal::new(0.2);
-	let brush_opacity = RwSignal::new(0.05);
-	let brush_softness = RwSignal::new(1.0);
+	let brush_size = RwSignal::new(0.1);
+	let brush_opacity = RwSignal::new(1.0);
+	let brush_hardness = RwSignal::new(0.5);
 
 	view! {
 		<Title text="Home"/>
@@ -35,7 +35,7 @@ pub fn Home() -> impl IntoView {
 						brush_color=brush_color
 						brush_size=brush_size
 						brush_opacity=brush_opacity
-						brush_softness=brush_softness
+						brush_hardness=brush_hardness
 					/>
 
 					<div class="SidePanels">
@@ -61,12 +61,12 @@ pub fn Home() -> impl IntoView {
 									step=0.05
 								/>
 							</BrushSetting>
-							<BrushSetting name="Softness">
+							<BrushSetting name="Hardness">
 								<thaw::Slider
-									value=brush_softness
-									min=0.1
-									max=4.0
-									step=0.2
+									value=brush_hardness
+									min=0.05
+									max=1.0
+									step=0.05
 								/>
 							</BrushSetting>
 						</Panel>
