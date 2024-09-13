@@ -49,8 +49,8 @@ pub fn Home() -> impl IntoView {
 								<thaw::Slider
 									value=brush_size
 									min=0.0
-									max=1.0
-									step=0.05
+									max=0.25
+									step=0.01
 								/>
 							</BrushSetting>
 							<BrushSetting name="Opacity">
