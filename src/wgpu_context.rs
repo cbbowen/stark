@@ -43,6 +43,9 @@ impl WgpuContext {
 				&wgpu::DeviceDescriptor {
 					required_features: wgpu::Features::default()
 						| wgpu::Features::INDIRECT_FIRST_INSTANCE
+						// This could be useful, but I think we can get away with 16-bit floats for now.
+						// | FLOAT32_FILTERABLE
+						// This would be convenient for brush shapes, but it's currently native-only.
 						// | wgpu::Features::ADDRESS_MODE_CLAMP_TO_ZERO
 						,
 					

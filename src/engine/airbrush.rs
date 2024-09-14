@@ -170,8 +170,6 @@ pub struct InputPoint {
 
 pub struct Airbrush {
 	pipeline: wgpu::RenderPipeline,
-	// shape_texture: wgpu::TextureView,
-	// shape_sampler: wgpu::Sampler,
 	bind_group: bind_groups::BindGroup0,
 	action_buffer: wgpu::Buffer,
 	vertex_buffer: wgpu::Buffer,
@@ -202,8 +200,6 @@ impl Airbrush {
 		let (bind_group, action_buffer) = create_bind_group(device, &shape_texture, &shape_sampler);
 		Self {
 			pipeline,
-			// shape_texture,
-			// shape_sampler,
 			bind_group,
 			action_buffer,
 			vertex_buffer,
@@ -215,8 +211,9 @@ impl Airbrush {
 
 	pub fn drag(&mut self, queue: &wgpu::Queue, point: InputPoint) -> Option<AirbrushDrawable<'_>> {
 		if let Some(last_point) = self.last_point {
-			let min_spacing =
-				0.05 * (point.size * point.pressure + last_point.size * last_point.pressure);
+			let point_size = point.size * point.pressure;
+			let last_point_size = last_point.size * last_point.pressure;
+			let min_spacing = 0.05 * (point_size + last_point_size);
 			let delta_squared = (point.position - last_point.position).length_squared();
 			if delta_squared < min_spacing.powi(2) {
 				return None;
@@ -240,9 +237,7 @@ impl Airbrush {
 			.write(&AirbrushAction {
 				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
 				color: point.color,
-				pressure: point.pressure,
-				// opacity: point.opacity,
-				opacity: point.opacity,
+				opacity: point.pressure * point.opacity,
 				hardness: point.hardness,
 			})
 			.unwrap();
@@ -258,6 +253,14 @@ impl Airbrush {
 			Event(length + s0, vec2(1.0, 1.0)),
 		];
 		events.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+		
+		// Ensure the bounds are non-decreasing.
+		let mut min_u_bound = Vec2::ZERO;
+		for event in events.iter_mut() {
+			min_u_bound = min_u_bound.max(event.1);
+			event.1 = min_u_bound;
+		}
+
 		let mut vertices = Vec::with_capacity(8);
 		for Event(distance, u_bounds) in events {
 			let p = p0 + distance * tangent;

@@ -1,4 +1,15 @@
-# WGPU
+# Features
+
+* Beautiful Lab colors, both for picking and blending.
+* Full GPU acceleration.
+* Continuous brushes.
+* (in-progress) Infinite canvas.
+* (in-progress) Infinite undo history.
+* (maybe) Collaborative editing.
+
+# Dependencies
+
+## WGPU
 https://sotrh.github.io/learn-wgpu/beginner/tutorial2-surface
 * `wgpu::Instance`
 * `wgpu::Surface`
@@ -12,14 +23,6 @@ https://sotrh.github.io/learn-wgpu/beginner/tutorial2-surface
 * `wgpu::Device` and `wgpu::Queue`
   * `async`hronously constructed from `wgpu::Adapter` (via `request_device`)
 
-# Dioxus
-https://docs.rs/dioxus-hooks/latest/dioxus_hooks/index.html
-* `RenderCanvas`
-  * On creation (`onmounted`), we get a `web_sys::HtmlCanvasElement` that can be used to construct the surface.
-  * On destruction (`dioxus::hooks::use_on_destroy`), we need to remove the surface constructed from the `web_sys::HtmlCanvasElement`.
-  * On resize, we need to `configure` the surface to the `wgpu::Device`.
-
-# Alternatives considered
 ## Leptos
 https://github.com/leptos-rs/leptos
 https://book.leptos.dev/web_sys.html
@@ -34,3 +37,13 @@ canvas_ref.on_load(move |canvas: HtmlElement<html::Canvas>| {
 	// ...
 });
 ```
+
+
+## Alternatives considered
+
+### Dioxus
+https://docs.rs/dioxus-hooks/latest/dioxus_hooks/index.html
+* `RenderCanvas`
+  * On creation (`onmounted`), we get a `web_sys::HtmlCanvasElement` that can be used to construct the surface.
+  * On destruction (`dioxus::hooks::use_on_destroy`), we need to remove the surface constructed from the `web_sys::HtmlCanvasElement`.
+  * On resize, we need to `configure` the surface to the `wgpu::Device`.

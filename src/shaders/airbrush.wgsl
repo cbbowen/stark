@@ -3,7 +3,6 @@ include!("dither.wgsl") {}
 struct AirbrushAction {
 	seed: vec2<f32>,
 	color: vec3<f32>,
-	pressure: f32,
 	opacity: f32,
 	hardness: f32,
 };
