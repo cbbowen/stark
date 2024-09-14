@@ -6,15 +6,20 @@ pub fn Initializing() -> impl IntoView {
 }
 
 #[component]
-pub fn ErrorList(#[prop(into)] errors: Signal<Errors>) -> impl IntoView {
+pub fn ErrorList(#[prop(into)] errors: ArcSignal<Errors>) -> impl IntoView {
 	view! {
 		<ul>
 			{move || {
-				errors.with(move |errors|
+				let errors: Vec<_> = errors.with(move |errors|
 					errors
 					.iter()
-					.map(|(_, e)| view! { <li>{e.to_string()}</li> })
-					.collect_view())
+					.map(|(_, e)| e.to_string()).collect());
+				tracing::warn!(?errors, "ErrorList::view");
+
+				errors
+					.into_iter()
+					.map(|e| view! { <li>{e}</li> })
+					.collect_view()
 			}}
 		</ul>
 	}

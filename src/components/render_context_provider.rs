@@ -1,4 +1,5 @@
-use crate::WgpuContext;
+use crate::components::fallback::ErrorList;
+use crate::{WgpuContext, WgpuContextError};
 use leptos::children::ChildrenFn;
 use leptos::context::Provider;
 use leptos::prelude::*;
@@ -12,19 +13,20 @@ pub fn RenderContextProvider(
 	children: ChildrenFn,
 ) -> impl IntoView {
 	let resource =
-		LocalResource::new(|| async { Arc::new(WgpuContext::new().await.unwrap()) });
+		LocalResource::new(|| async { WgpuContext::new().await.map(Arc::new) });
 
 	view! {
 		<Suspense fallback=initializing_fallback>
-			{move || {
-				let children = children.clone();
-				Suspend::new(async move {
-					let resource = resource.await;
+			<ErrorBoundary fallback=move |errors| view! { <ErrorList errors/> }>
+				{move || {
 					let children = children.clone();
-					view! { <Provider value=resource>{children()}</Provider> }
-				})
+					Suspend::new(async move {
+						let resource = resource.await?;
+						let children = children.clone();
+						Ok::<_, WgpuContextError>(view! { <Provider value=resource>{children()}</Provider> })
+					})
 			}}
-
+			</ErrorBoundary>
 		</Suspense>
 	}
 }
