@@ -104,6 +104,7 @@ pub fn uniform_samples(size: u32) -> impl Iterator<Item = f32> {
 }
 
 pub fn generate_shape_row(y: f32, width: u32) -> impl Iterator<Item = f32> {
+	// log (1 - shape(x, y)) where shape(x, y) = 1 - (x^2 + y^2)
 	uniform_samples(width).map(move |x| (x * x + y * y).min(1.0).ln())
 }
 

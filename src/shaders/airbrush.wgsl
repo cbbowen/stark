@@ -33,7 +33,7 @@ fn vs_main(
     var out: VertexOutput;
     out.position = vec4(vec2(2.0, -2.0) * (in.position - 0.5), 0.0, 1.0);
     out.u_bounds = in.u_bounds;
-	 out.v = f32(in.vertex_index & 1);
+    out.v = f32(in.vertex_index & 1);
     return out;
 }
 
@@ -43,11 +43,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	// let theta = 6.28 * 0.5 * (in.u_bounds.y + in.u_bounds.x);
 	// return vec4(0.75, 0.15 * vec2(sin(theta), cos(theta)), in.u_bounds.y - in.u_bounds.x);
 
-	 let transmission =
-	   textureSample(shape_texture, shape_sampler, vec2(in.u_bounds.y, in.v)).x -
-		textureSample(shape_texture, shape_sampler, vec2(in.u_bounds.x, in.v)).x;
+    let shape_transmission = action.hardness * (
+		textureSample(shape_texture, shape_sampler, vec2(in.u_bounds.y, in.v)).x -
+	   textureSample(shape_texture, shape_sampler, vec2(in.u_bounds.x, in.v)).x);
+	
 	 // TODO: This way of implementing opacity isn't correct for continuous splatting.
-	 let alpha = action.opacity * (1.0 - exp(action.hardness * transmission)) * (1.0 + dither1(in.position.xy + action.seed) / 8.0);
+	 // We want changing opacity to be equivalent to pointwise scaling the brush shape texture
+	 // by the same value, which this is not. I think in general, that's not even something
+	 // we can compute exactly here.
+
+    let alpha = action.opacity * (1.0 - exp(shape_transmission)) * (1.0 + 0.0 * dither1(in.position.xy + action.seed));
 
     let color = action.color + dither3(in.position.xy + action.seed) / 128;
     return vec4(color, clamp(alpha, 0.0, 1.0));
