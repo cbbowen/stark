@@ -65,7 +65,7 @@ pub fn Home() -> impl IntoView {
 								<thaw::Slider
 									value=brush_hardness
 									min=0.05
-									max=1.0
+									max=2.0
 									step=0.05
 								/>
 							</BrushSetting>
