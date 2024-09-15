@@ -21,7 +21,7 @@ pub fn Home() -> impl IntoView {
 	let brush_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
 	let brush_size = RwSignal::new(0.1);
 	let brush_opacity = RwSignal::new(1.0);
-	let brush_hardness = RwSignal::new(0.5);
+	let brush_rate = RwSignal::new(0.5);
 
 	view! {
 		<Title text="Home"/>
@@ -35,7 +35,7 @@ pub fn Home() -> impl IntoView {
 						brush_color=brush_color
 						brush_size=brush_size
 						brush_opacity=brush_opacity
-						brush_hardness=brush_hardness
+						brush_rate=brush_rate
 					/>
 
 					<div class="SidePanels">
@@ -61,9 +61,9 @@ pub fn Home() -> impl IntoView {
 									step=0.05
 								/>
 							</BrushSetting>
-							<BrushSetting name="Hardness">
+							<BrushSetting name="Rate">
 								<thaw::Slider
-									value=brush_hardness
+									value=brush_rate
 									min=0.05
 									max=2.0
 									step=0.05

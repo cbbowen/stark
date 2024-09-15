@@ -55,6 +55,18 @@ impl<Y> From<(f32, Y)> for Point<Y> {
 	}
 }
 
+impl<Y> Into<(f32, Y)> for Point<Y> {
+	fn into(self) -> (f32, Y) {
+		 (*self.x, self.y)
+	}
+}
+
+impl<'a, Y> Into<(f32, &'a Y)> for &'a Point<Y> {
+	fn into(self) -> (f32, &'a Y) {
+		 (*self.x, &self.y)
+	}
+}
+
 pub struct Linear<Y> {
 	slope: Y,
 	intercept: Y,
@@ -240,6 +252,18 @@ impl<Y: Interpolable> PiecewiseLinear<Y> {
 			let z = z_linear.evaluate(x);
 			std::iter::once((x, f(y, z)))
 		})
+	}
+
+	pub fn inflection_points<'a>(&'a self) -> impl Iterator<Item=(f32, &'a Y)> {
+		self.points.iter().map(move |p| p.into())
+	}
+
+	pub fn first_inflection_point(&self) -> (f32, &Y) {
+		self.points.first().unwrap().into()
+	}
+
+	pub fn last_inflection_point(&self) -> (f32, &Y) {
+		self.points.last().unwrap().into()
 	}
 
 	pub fn map_merged_inflection_points<Z: Interpolable, V>(

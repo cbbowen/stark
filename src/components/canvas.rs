@@ -132,8 +132,8 @@ fn create_canvas_bind_groups(
 pub fn Canvas(
 	#[prop(into)] brush_color: Signal<Vec3>,
 	#[prop(into)] brush_size: Signal<f64>,
+	#[prop(into)] brush_rate: Signal<f64>,
 	#[prop(into)] brush_opacity: Signal<f64>,
-	#[prop(into)] brush_hardness: Signal<f64>,
 ) -> impl IntoView {
 	let context: Arc<WgpuContext> = use_context().unwrap();
 	let resources: Arc<render::Resources> = use_context().unwrap();
@@ -337,7 +337,7 @@ pub fn Canvas(
 					color: brush_color.get_untracked(),
 					size: brush_size.get_untracked() as f32,
 					opacity: brush_opacity.get_untracked() as f32,
-					hardness: brush_hardness.get_untracked() as f32,
+					rate: brush_rate.get_untracked() as f32,
 				};
 				if let Some(drawable) = airbrush.drag(context.queue(), input_point) {
 					draw(drawable);

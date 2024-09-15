@@ -83,39 +83,41 @@ fn create_bind_group(
 	(bind_group, buffer)
 }
 
-pub fn integrate_shape_row(data: impl IntoIterator<Item = f32>) -> impl Iterator<Item = f32> {
+pub fn preprocess_shape_row(data: impl IntoIterator<Item = f32>, opacity: f32) -> impl Iterator<Item = f32> {
 	let data = data.into_iter();
-	data.scan(0.0, |sum, value| {
-		let result = Some(*sum + 0.5 * value);
+	data
+	.map(move |v| ((-opacity * v.max(0.0)).ln_1p()))
+	.scan(0.0, move |sum, value| {
+		let result = Some((*sum + 0.5 * value).min(0.0));
 		*sum += value;
 		result
 	})
 }
 
-pub fn integrate_shape_rows<'a>(data: &'a [f32], width: u32) -> impl Iterator<Item = f32> + 'a {
-	data
-		.chunks_exact(width as usize)
-		.flat_map(|row| integrate_shape_row(row.iter().copied()))
+pub fn uniform_samples(size: u32) -> impl Iterator<Item = f32> {
+	let scale = 1.0 / (size as f32 - 1.0);
+	(0..size).map(move |i| scale * i as f32)
 }
 
-pub fn uniform_samples(size: u32) -> impl Iterator<Item = f32> {
-	let scale = 2.0 / (size as f32 - 1.0);
-	(0..size).map(move |i| scale * i as f32 - 1.0)
+pub fn centered_uniform_samples(size: u32) -> impl Iterator<Item = f32> {
+	uniform_samples(size).map(|x| 2.0 * x - 1.0)
 }
 
 pub fn generate_shape_row(y: f32, width: u32) -> impl Iterator<Item = f32> {
-	// log (1 - shape(x, y)) where shape(x, y) = 1 - (x^2 + y^2)
-	uniform_samples(width).map(move |x| (x * x + y * y).min(1.0).ln())
+	centered_uniform_samples(width).map(move |x| (1.0 - x * x - y * y).max(0.0))
 }
 
 fn create_shape_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
 	let size = 64u32;
+	let opacity_levels = 8;
 
 	let data =
-		uniform_samples(size).flat_map(move |y| integrate_shape_row(generate_shape_row(y, size)));
+		uniform_samples(opacity_levels).flat_map(move |opacity| 
+			centered_uniform_samples(size).flat_map(
+				move |y| preprocess_shape_row(generate_shape_row(y, size), opacity)));
 
 	// let format = wgpu::TextureFormat::R8Snorm;
-	// let data = data.map(|v| ((v / 2.4).clamp(-1.0, 1.0) * 127.0) as i8);
+	// let data = data.map(|v| (v.clamp(-1.0, 1.0) * 127.0) as i8);
 
 	let format = wgpu::TextureFormat::R16Float;
 	let data = data.map(half::f16::from_f32);
@@ -128,11 +130,11 @@ fn create_shape_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Tex
 			size: wgpu::Extent3d {
 				width: size,
 				height: size,
-				depth_or_array_layers: 1,
+				depth_or_array_layers: opacity_levels,
 			},
 			mip_level_count: 1,
 			sample_count: 1,
-			dimension: wgpu::TextureDimension::D2,
+			dimension: wgpu::TextureDimension::D3,
 			format,
 			usage: wgpu::TextureUsages::TEXTURE_BINDING,
 			view_formats: &[format],
@@ -166,7 +168,7 @@ pub struct InputPoint {
 	pub color: glam::Vec3,
 	pub size: f32,
 	pub opacity: f32,
-	pub hardness: f32,
+	pub rate: f32,
 }
 
 pub struct Airbrush {
@@ -234,51 +236,73 @@ impl Airbrush {
 		let s0 = last_point.size * last_point.pressure;
 		let s1 = point.size * point.pressure;
 
+		let o0 = last_point.opacity * last_point.pressure.sqrt();
+		let o1 = point.opacity * point.pressure.sqrt();
+		let r0 = last_point.rate * last_point.pressure.sqrt();
+		let r1 = point.rate * point.pressure.sqrt();
+
 		let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
 		contents
 			.write(&AirbrushAction {
 				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
 				color: point.color,
-				opacity: point.pressure * point.opacity,
-				hardness: point.hardness,
 			})
 			.unwrap();
 		queue.write_buffer(&self.action_buffer, 0, &contents.into_inner());
 
 		let shift_fraction = ((s0 - s1) * s0 / length).clamp(-1.0, 1.0);
-		let (width, s0, s1) = if length > s0 + s1 {
-			(
-				PiecewiseLinear::new([
-					(-s0, s0),
-					(s0 * shift_fraction, s0),
-					(length + s1 * shift_fraction, s1),
-					(length + s1, s1),
-				]),
-				s0,
-				s1,
-			)
+		let blend = if length > s0 + s1 {
+			PiecewiseLinear::new([
+				(-s0, 0.0),
+				(s0 * shift_fraction, 0.0),
+				(length + s1 * shift_fraction, 1.0),
+				(length + s1, 1.0),
+			])
 		} else {
-			let (s0, s1) = (s0.max(s1 - length), s1.max(s0 - length));
-			(PiecewiseLinear::new([(-s0, s0), (length + s1, s1)]), s0, s1)
+			let (b0, b1) = if s1 > length + s0 {
+				((1.0 - length / (s1 - s0)).max(0.0), 1.0)
+			} else if s0 > length + s1 {
+				(0.0, (length / (s0 - s1)).min(1.0))
+			} else {
+				(0.0, 1.0)
+			};
+			PiecewiseLinear::new([(0.0 - (s0 + b0 * (s1 - s0)), b0), (length + (s0 + b1 * (s1 - s0)), b1)])
 		};
-		let u_start = PiecewiseLinear::new([(length - s1, 0.0), (length + s1, 1.0)]);
-		let u_end = PiecewiseLinear::new([(-s0, 0.0), (s0, 1.0)]);
-		let (width, u_start, u_end) = (width.unwrap(), u_start.unwrap(), u_end.unwrap());
+		let blend = blend.unwrap();
+
+		let u_start = {
+			let (d, b) = blend.last_inflection_point();
+			let s = s0 + b * (s1 - s0);
+			PiecewiseLinear::new([(d - 2.0 * s, 0.0), (d, 1.0)])
+		};
+		let u_end = {
+			let (d, b) = blend.first_inflection_point();
+			let s = s0 + b * (s1 - s0);
+			PiecewiseLinear::new([(d, 0.0), (d + 2.0 * s, 1.0)])
+		};
+		let (u_start, u_end) = (u_start.unwrap(), u_end.unwrap());
 
 		let u_bounds = u_start.bilinear_map(&u_end, vec2);
-		let events = width.map_merged_inflection_points(&u_bounds, |d, w, b| (d, w, b));
+		let events = blend.map_merged_inflection_points(&u_bounds, move |distance, blend, u_bounds| (distance, blend, u_bounds));
 
 		let mut vertices = Vec::with_capacity(12);
-		for (distance, width, u_bounds) in events {
+		for (distance, blend, u_bounds) in events {
 			let p = p0 + distance * tangent;
+			let width = s0 + blend * (s1 - s0);
+			let opacity = o0 + blend * (o1 - o0);
+			let rate = r0 + blend * (r1 - r0);
 			vertices.extend([
 				VertexInput {
 					position: p - width * normal,
 					u_bounds,
+					opacity,
+					rate,
 				},
 				VertexInput {
 					position: p + width * normal,
 					u_bounds,
+					opacity,
+					rate,
 				},
 			])
 		}
@@ -314,17 +338,19 @@ mod tests {
 
 	#[test]
 	fn shape() {
-		for y in [-0.25, 0.0, 0.5, 1.0] {
+		for y in [0.0, 0.5, 1.0] {
+			println!("y = {y}");
 			let shape = generate_shape_row(y, 8).collect_vec();
-			println!("shape at y = {y}:\n  {shape:?}");
+			println!("  {shape:?}");
 		}
 	}
 
 	#[test]
-	fn integrate_shape() {
-		for y in [-0.25, 0.0, 0.5, 1.0] {
-			let shape = integrate_shape_row(generate_shape_row(y, 8)).collect_vec();
-			println!("integrated shape at y = {y}:\n  {shape:?}");
+	fn preprocess_shape() {
+		for opacity in [0.0, 0.25, 0.5, 0.75, 1.0] {
+			println!("opacity = {opacity}");
+			let shape = preprocess_shape_row(generate_shape_row(0.0, 8), opacity).collect_vec();
+			println!("  {shape:?}");
 		}
 	}
 }
