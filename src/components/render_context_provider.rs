@@ -12,21 +12,23 @@ pub fn RenderContextProvider(
 	#[prop(optional, into)] initializing_fallback: ViewFnOnce,
 	children: ChildrenFn,
 ) -> impl IntoView {
-	let resource =
-		LocalResource::new(|| async { WgpuContext::new().await.map(Arc::new) });
+	let resource = LocalResource::new(|| async { WgpuContext::new().await.map(Arc::new) });
 
 	view! {
-		<Suspense fallback=initializing_fallback>
-			<ErrorBoundary fallback=move |errors| view! { <ErrorList errors/> }>
+		<ErrorBoundary fallback=move |errors| view! { <ErrorList errors/> }>
+			<Suspense fallback=initializing_fallback>
 				{move || {
 					let children = children.clone();
 					Suspend::new(async move {
 						let resource = resource.await?;
 						let children = children.clone();
-						Ok::<_, WgpuContextError>(view! { <Provider value=resource>{children()}</Provider> })
+						Ok::<
+							_,
+							WgpuContextError,
+						>(view! { <Provider value=resource>{children()}</Provider> })
 					})
-			}}
-			</ErrorBoundary>
-		</Suspense>
+				}}
+			</Suspense>
+		</ErrorBoundary>
 	}
 }
