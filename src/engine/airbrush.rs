@@ -1,6 +1,6 @@
-use crate::{render, util::PiecewiseLinear};
 use crate::render::Resources;
 use crate::shaders::airbrush::*;
+use crate::{render, util::PiecewiseLinear};
 use encase::ShaderType;
 use glam::{vec2, Vec2};
 use itertools::Itertools;
@@ -246,20 +246,23 @@ impl Airbrush {
 		queue.write_buffer(&self.action_buffer, 0, &contents.into_inner());
 
 		let shift_fraction = ((s0 - s1) * s0 / length).clamp(-1.0, 1.0);
-		let (width, u_start, u_end) = if length > s0 + s1 {
+		let (width, s0, s1) = if length > s0 + s1 {
 			(
-				PiecewiseLinear::new([(-s0, s0), (s0 * shift_fraction, s0), (length + s1 * shift_fraction, s1), (length + s1, s1)]),
-				PiecewiseLinear::new([(length-s1, 0.0), (length+s1, 1.0)]),
-				PiecewiseLinear::new([(-s0, 0.0), (s0, 1.0)]),
+				PiecewiseLinear::new([
+					(-s0, s0),
+					(s0 * shift_fraction, s0),
+					(length + s1 * shift_fraction, s1),
+					(length + s1, s1),
+				]),
+				s0,
+				s1,
 			)
 		} else {
-			let s = s0.max(s1);
-			(
-				PiecewiseLinear::new([(-s, s), (length + s, s)]),
-				PiecewiseLinear::new([(length-s, 0.0), (length+s, 1.0)]),
-				PiecewiseLinear::new([(-s, 0.0), (s, 1.0)]),
-			)
+			let (s0, s1) = (s0.max(s1 - length), s1.max(s0 - length));
+			(PiecewiseLinear::new([(-s0, s0), (length + s1, s1)]), s0, s1)
 		};
+		let u_start = PiecewiseLinear::new([(length - s1, 0.0), (length + s1, 1.0)]);
+		let u_end = PiecewiseLinear::new([(-s0, 0.0), (s0, 1.0)]);
 		let (width, u_start, u_end) = (width.unwrap(), u_start.unwrap(), u_end.unwrap());
 
 		let u_bounds = u_start.bilinear_map(&u_end, vec2);

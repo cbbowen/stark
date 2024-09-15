@@ -39,7 +39,7 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-	// // Useful for debugging toplogy.
+	// Useful for debugging toplogy.
 	// let theta = 6.28 * 0.5 * (in.u_bounds.y + in.u_bounds.x);
 	// return vec4(0.75, 0.15 * vec2(sin(theta), cos(theta)), in.u_bounds.y - in.u_bounds.x);
 
@@ -52,7 +52,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	 // by the same value, which this is not. I think in general, that's not even something
 	 // we can compute exactly here.
 
-    let alpha = action.opacity * (1.0 - exp(shape_transmission)) * (1.0 + 0.0 * dither1(in.position.xy + action.seed));
+    let alpha =
+	 	action.opacity *
+		(1.0 - exp(shape_transmission)) *
+		(1.0 + 0.0 * dither1(in.position.xy + action.seed));
 
     let color = action.color + dither3(in.position.xy + action.seed) / 128;
     return vec4(color, clamp(alpha, 0.0, 1.0));
