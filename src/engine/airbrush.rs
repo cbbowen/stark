@@ -1,4 +1,4 @@
-use crate::render;
+use crate::{render, util::PiecewiseLinear};
 use crate::render::Resources;
 use crate::shaders::airbrush::*;
 use encase::ShaderType;
@@ -12,7 +12,7 @@ fn create_vertex_buffer(
 	let layout = VertexInput::vertex_buffer_layout(wgpu::VertexStepMode::Vertex);
 	let buffer = device.create_buffer(&wgpu::BufferDescriptor {
 		label: Some("airbrush::create_vertex_buffer"),
-		size: layout.array_stride * 8,
+		size: layout.array_stride * 12,
 		usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
 		mapped_at_creation: false,
 	});
@@ -152,7 +152,7 @@ fn create_shape_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 		address_mode_w: address_mode,
 		mag_filter: wgpu::FilterMode::Linear,
 		min_filter: wgpu::FilterMode::Linear,
-		mipmap_filter: wgpu::FilterMode::Nearest,
+		mipmap_filter: wgpu::FilterMode::Linear,
 		// border_color: Some(wgpu::SamplerBorderColor::Zero),
 		..Default::default()
 	})
@@ -214,6 +214,7 @@ impl Airbrush {
 			let point_size = point.size * point.pressure;
 			let last_point_size = last_point.size * last_point.pressure;
 			let min_spacing = 0.05 * (point_size + last_point_size);
+			// let min_spacing = 1.5 * (point_size + last_point_size);
 			let delta_squared = (point.position - last_point.position).length_squared();
 			if delta_squared < min_spacing.powi(2) {
 				return None;
@@ -243,35 +244,36 @@ impl Airbrush {
 			.unwrap();
 		queue.write_buffer(&self.action_buffer, 0, &contents.into_inner());
 
-		#[derive(Clone, Copy, Debug)]
-		struct Event(f32, Vec2);
-		let overlap = ((s0 + s1) - length).max(0.0);
-		let mut events = [
-			Event(-s0, vec2(0.0, 0.0)),
-			Event(s0, vec2(overlap / (2.0 * s1), 1.0)),
-			Event(length - s1, vec2(0.0, 1.0 - overlap / (2.0 * s0))),
-			Event(length + s0, vec2(1.0, 1.0)),
-		];
-		events.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-		
-		// Ensure the bounds are non-decreasing.
-		let mut min_u_bound = Vec2::ZERO;
-		for event in events.iter_mut() {
-			min_u_bound = min_u_bound.max(event.1);
-			event.1 = min_u_bound;
-		}
+		let shift_fraction = ((s0 - s1) * s0 / length).clamp(-1.0, 1.0);
+		let (width, u_start, u_end) = if length > s0 + s1 {
+			(
+				PiecewiseLinear::new([(-s0, s0), (s0 * shift_fraction, s0), (length + s1 * shift_fraction, s1), (length + s1, s1)]),
+				PiecewiseLinear::new([(length-s1, 0.0), (length+s1, 1.0)]),
+				PiecewiseLinear::new([(-s0, 0.0), (s0, 1.0)]),
+			)
+		} else {
+			let s = s0.max(s1);
+			(
+				PiecewiseLinear::new([(-s, s), (length + s, s)]),
+				PiecewiseLinear::new([(length-s, 0.0), (length+s, 1.0)]),
+				PiecewiseLinear::new([(-s, 0.0), (s, 1.0)]),
+			)
+		};
+		let (width, u_start, u_end) = (width.unwrap(), u_start.unwrap(), u_end.unwrap());
 
-		let mut vertices = Vec::with_capacity(8);
-		for Event(distance, u_bounds) in events {
+		let u_bounds = u_start.bilinear_map(&u_end, vec2);
+		let events = width.map_merged_inflection_points(&u_bounds, |d, w, b| (d, w, b));
+
+		let mut vertices = Vec::with_capacity(12);
+		for (distance, width, u_bounds) in events {
 			let p = p0 + distance * tangent;
-			let s = s0 + (distance / length).clamp(0.0, 1.0) * (s1 - s0);
 			vertices.extend([
 				VertexInput {
-					position: p - s * normal,
+					position: p - width * normal,
 					u_bounds,
 				},
 				VertexInput {
-					position: p + s * normal,
+					position: p + width * normal,
 					u_bounds,
 				},
 			])

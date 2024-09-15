@@ -39,10 +39,14 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+	// // Useful for debugging toplogy.
+	// let theta = 6.28 * 0.5 * (in.u_bounds.y + in.u_bounds.x);
+	// return vec4(0.75, 0.15 * vec2(sin(theta), cos(theta)), in.u_bounds.y - in.u_bounds.x);
+
 	 let transmission =
 	   textureSample(shape_texture, shape_sampler, vec2(in.u_bounds.y, in.v)).x -
 		textureSample(shape_texture, shape_sampler, vec2(in.u_bounds.x, in.v)).x;
-	 //  let alpha = action.opacity * (1.0 - exp(action.hardness * transmission));
+	 // TODO: This way of implementing opacity isn't correct for continuous splatting.
 	 let alpha = action.opacity * (1.0 - exp(action.hardness * transmission));
 
     let color = action.color + dither3(in.position.xy + action.seed) / 128;

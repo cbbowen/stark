@@ -23,6 +23,9 @@ pub use leptos_try::*;
 mod oklab;
 pub use oklab::*;
 
+mod piecewise_linear;
+pub use piecewise_linear::*;
+
 use leptos::wasm_bindgen;
 use leptos::web_sys;
 use wasm_bindgen::JsCast;
