@@ -20,8 +20,12 @@ static_assertions = "1.1.0"
 tracing = { version = "0.1", features = ["release_max_level_warn"] }
 tracing-log = { version = "0.2", optional = true }
 tracing-subscriber = "0.3"
-# We could enable the "webgl" feature to support older browsers.
-wgpu = { version = "22.1", features = ["fragile-send-sync-non-atomic-wasm"] }
+wgpu = { version = "22.1", features = [
+	# Enable the "webgl" feature to support older browsers.
+	"webgl",
+	# We only have a single thread in WASM, so make everything Send+Sync.
+	"fragile-send-sync-non-atomic-wasm"
+] }
 bytemuck = { version = "1.17", features = ["derive"] }
 encase = { version = "0.9.0", features = ["glam"] }
 # This must match the version supported by encase.
