@@ -47,7 +47,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	   textureSample(shape_texture, shape_sampler, vec2(in.u_bounds.y, in.v)).x -
 		textureSample(shape_texture, shape_sampler, vec2(in.u_bounds.x, in.v)).x;
 	 // TODO: This way of implementing opacity isn't correct for continuous splatting.
-	 let alpha = action.opacity * (1.0 - exp(action.hardness * transmission));
+	 let alpha = action.opacity * (1.0 - exp(action.hardness * transmission)) * (1.0 + dither1(in.position.xy + action.seed) / 8.0);
 
     let color = action.color + dither3(in.position.xy + action.seed) / 128;
     return vec4(color, clamp(alpha, 0.0, 1.0));
