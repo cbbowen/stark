@@ -1,19 +1,18 @@
 use super::render_surface;
-use crate::shaders::{self, color_picker::*};
+use crate::shaders::{color_picker::*};
 use crate::util::*;
 use crate::{render, WgpuContext};
+use crate::render::BindingBuffer;
+use itertools::Itertools;
 use leptos::prelude::*;
 use leptos::{component, view, IntoView};
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
-use itertools::Itertools;
 
-fn create_bind_group(device: &wgpu::Device) -> (bind_groups::BindGroup0, wgpu::Buffer) {
-	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-		label: Some("drawing_action"),
-		contents: bytemuck::cast_slice(&[0.5f32]),
-		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-	});
+fn create_bind_group(device: &wgpu::Device) -> (bind_groups::BindGroup0, BindingBuffer<f32>) {
+	let buffer = BindingBuffer::init(&0.5f32)
+		.label("drawing_action")
+		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
+		.create(device);
 	let bind_group = bind_groups::BindGroup0::from_bindings(
 		device,
 		bind_groups::BindGroupLayout0 {
@@ -28,16 +27,16 @@ fn create_render_pipeline(
 	texture_format: wgpu::TextureFormat,
 	shader: &render::Shader,
 ) -> wgpu::RenderPipeline {
-	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-		label: Some("ColorPicker"),
-		layout: Some(&shader.layout),
-		vertex: wgpu::VertexState {
+	render::render_pipeline()
+		.label("ColorPicker")
+		.layout(&shader.layout)
+		.vertex(wgpu::VertexState {
 			module: &shader.module,
 			entry_point: ENTRY_VS_MAIN,
 			compilation_options: Default::default(),
 			buffers: &[],
-		},
-		fragment: Some(fragment_state(
+		})
+		.fragment(fragment_state(
 			&shader.module,
 			&fs_main_entry(
 				[Some(wgpu::ColorTargetState {
@@ -47,21 +46,8 @@ fn create_render_pipeline(
 				})],
 				&OverrideConstants { proof: None },
 			),
-		)),
-		primitive: wgpu::PrimitiveState {
-			topology: wgpu::PrimitiveTopology::TriangleStrip,
-			strip_index_format: None,
-			front_face: wgpu::FrontFace::Ccw,
-			cull_mode: Some(wgpu::Face::Back),
-			polygon_mode: wgpu::PolygonMode::Fill,
-			unclipped_depth: false,
-			conservative: false,
-		},
-		depth_stencil: None,
-		multisample: wgpu::MultisampleState::default(),
-		multiview: None,
-		cache: None,
-	})
+		))
+		.create(device)
 }
 
 #[component]
@@ -97,9 +83,7 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 			let render_pipeline = render_pipeline.get();
 
 			let lightness = lightness.get();
-			context
-				.queue()
-				.write_buffer(&buffer, 0, bytemuck::cast_slice(&[lightness as f32]));
+			buffer.write_sized(context.queue(), lightness as f32);
 
 			let callback = move |view: wgpu::TextureView| {
 				let Some(render_pipeline) = render_pipeline.as_ref() else {
@@ -167,7 +151,9 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 	let style = move || {
 		let fractions = (0..=10).map(|i| i as f32 * 0.1);
 		let color = color.get();
-		let colors = fractions.clone().map(|l| oklab_to_rgb(glam::vec3(l, color.y, color.z)));
+		let colors = fractions
+			.clone()
+			.map(|l| oklab_to_rgb(glam::vec3(l, color.y, color.z)));
 		let colors = colors.map(|c| {
 			format!(
 				"rgb({},{},{})",
@@ -194,16 +180,15 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 				on:touchstart=touchstart
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
-			/>
+			></render_surface::RenderSurface>
 
 			<svg class="ColorPickerOverlay" width="300" height="300">
-				<g
-				transform="scale(300, 300)
-				           translate(0.5, 0.5)
-				           scale(0.5263, 0.5263)
-							  translate(-0.09, -0.24)">
-					<line x1="-1" y1="-1" x2="1" y2="1" stroke="gray" stroke-width="0.01"/>
-					<line x1="1" y1="-1" x2="-1" y2="1" stroke="gray" stroke-width="0.01"/>
+				<g transform="scale(300, 300)
+				translate(0.5, 0.5)
+				scale(0.5263, 0.5263)
+				translate(-0.09, -0.24)">
+					<line x1="-1" y1="-1" x2="1" y2="1" stroke="gray" stroke-width="0.01"></line>
+					<line x1="1" y1="-1" x2="-1" y2="1" stroke="gray" stroke-width="0.01"></line>
 				</g>
 			</svg>
 

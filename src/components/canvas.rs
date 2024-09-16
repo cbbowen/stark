@@ -1,6 +1,6 @@
 use crate::components::*;
 use crate::engine::{Airbrush, AirbrushDrawable, InputPoint};
-use crate::render;
+use crate::render::{self, BindingBuffer};
 use crate::util::{color_from_css_string, create_local_derived};
 use crate::*;
 use glam::*;
@@ -11,7 +11,6 @@ use util::CoordinateSource;
 use util::LocalCallback;
 use util::PointerCapture;
 use util::SetExt;
-use wgpu::util::DeviceExt;
 
 fn canvas_render_pipeline(
 	device: &wgpu::Device,
@@ -20,37 +19,24 @@ fn canvas_render_pipeline(
 ) -> wgpu::RenderPipeline {
 	use shaders::canvas::*;
 	let module = &shader.module;
-	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-		label: Some("Render Pipeline"),
-		layout: Some(&shader.layout),
-		vertex: wgpu::VertexState {
+	render::render_pipeline()
+		.label("Canvas")
+		.layout(&shader.layout)
+		.vertex(wgpu::VertexState {
 			module,
 			entry_point: ENTRY_VS_MAIN,
 			compilation_options: Default::default(),
 			buffers: &[],
-		},
-		fragment: Some(fragment_state(
+		})
+		.fragment(fragment_state(
 			module,
 			&fs_main_entry([Some(wgpu::ColorTargetState {
 				format: texture_format,
 				blend: Some(wgpu::BlendState::REPLACE),
 				write_mask: wgpu::ColorWrites::ALL,
 			})]),
-		)),
-		primitive: wgpu::PrimitiveState {
-			topology: wgpu::PrimitiveTopology::TriangleStrip,
-			strip_index_format: None,
-			front_face: wgpu::FrontFace::Ccw,
-			cull_mode: None,
-			polygon_mode: wgpu::PolygonMode::Fill,
-			unclipped_depth: false,
-			conservative: false,
-		},
-		depth_stencil: None,
-		multisample: wgpu::MultisampleState::default(),
-		multiview: None,
-		cache: None,
-	})
+		))
+		.create(device)
 }
 
 fn create_canvas_texture_view(
@@ -93,21 +79,19 @@ fn create_canvas_bind_groups(
 ) -> (
 	shaders::canvas::bind_groups::BindGroup0,
 	shaders::canvas::bind_groups::BindGroup1,
-	wgpu::Buffer,
+	BindingBuffer<Mat4>,
 ) {
 	use shaders::canvas::bind_groups::*;
 
-	let chart_to_canvas_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-		label: Some("chart_to_canvas"),
-		contents: bytemuck::cast_slice(&[glam::Mat4::IDENTITY]),
-		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-	});
+	let chart_to_canvas_buffer = BindingBuffer::init(&Mat4::IDENTITY)
+		.label("chart_to_canvas")
+		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
+		.create(device);
 
-	let canvas_to_view_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-		label: Some("canvas_to_view"),
-		contents: bytemuck::cast_slice(&[glam::Mat4::ZERO]),
-		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-	});
+	let canvas_to_view_buffer = BindingBuffer::init(&Mat4::ZERO)
+		.label("canvas_to_view")
+		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
+		.create(device);
 
 	(
 		BindGroup0::from_bindings(
@@ -207,11 +191,7 @@ pub fn Canvas(
 					return;
 				};
 
-				context.queue().write_buffer(
-					&canvas_to_view_buffer,
-					0,
-					bytemuck::cast_slice(&[canvas_to_view]),
-				);
+				canvas_to_view_buffer.write(context.queue(), canvas_to_view);
 
 				let mut encoder =
 					context
@@ -252,7 +232,12 @@ pub fn Canvas(
 		})
 	};
 
-	let airbrush = Airbrush::new(context.device(), context.queue(), &resources, canvas_texture_format);
+	let airbrush = Airbrush::new(
+		context.device(),
+		context.queue(),
+		&resources,
+		canvas_texture_format,
+	);
 	let airbrush = std::rc::Rc::new(std::cell::RefCell::new(airbrush));
 
 	let draw = {

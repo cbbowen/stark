@@ -7,6 +7,12 @@
 * (in-progress) Infinite undo history.
 * (maybe) Collaborative editing.
 
+# Plan
+
+* Use https://crates.io/crates/bresenham_zip to compute tiles from stroke topology.
+* Multisampling in the compositing pipeline.
+* Rauch-Tung-Striebel stroke smoothing.
+
 # Dependencies
 
 ## WGPU

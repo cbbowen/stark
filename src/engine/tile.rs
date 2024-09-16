@@ -1,9 +1,10 @@
+use crate::render::BindingBuffer;
 use crate::{shaders::chart::*, util::QueueExt, WgpuContext};
 use encase::{internal::WriteInto, CalculateSizeFor, ShaderType};
 use std::pin::Pin;
+use std::sync::Arc;
 use std::{cell::RefCell, marker::PhantomData};
 use wgpu::{BufferAddress, Extent3d};
-use std::sync::Arc;
 
 #[derive(Clone)]
 struct StableVec<T> {
@@ -175,14 +176,15 @@ where
 			..Default::default()
 		});
 
-		let data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-			label: Some("tile::Block::data_buffer"),
-			usage: wgpu::BufferUsages::STORAGE
-				| wgpu::BufferUsages::COPY_DST
-				| wgpu::BufferUsages::COPY_SRC,
-			size: <[Data]>::calculate_size_for(block_size as u64).get(),
-			mapped_at_creation: false,
-		});
+		let data_buffer = BindingBuffer::<[Data]>::with_capacity(block_size as u64)
+			.label("tile::Block::data_buffer")
+			.usage(
+				wgpu::BufferUsages::STORAGE
+					| wgpu::BufferUsages::COPY_DST
+					| wgpu::BufferUsages::COPY_SRC,
+			)
+			.create(device)
+			.into_raw();
 
 		let bind_group = BindGroup::from_bindings(
 			device,
@@ -361,7 +363,7 @@ fn draw_tile_internal<Data>(
 	tile_indices: impl IntoIterator<Item = Index>,
 ) {
 	use itertools::Itertools;
-	use wgpu::util::DeviceExt;
+	
 
 	for (block_index, block_tile_indices) in tile_indices
 		.into_iter()
@@ -373,15 +375,10 @@ fn draw_tile_internal<Data>(
 		block.bind_group.set(render_pass);
 
 		let layer_indices = block_tile_indices.map(|i| i.layer_index).collect_vec();
-		let instance_input_buffer =
-			pool
-				.context
-				.device()
-				.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-					label: Some("draw_tile::instance_input_buffer"),
-					contents: bytemuck::cast_slice(&layer_indices),
-					usage: wgpu::BufferUsages::VERTEX,
-				});
+		let instance_input_buffer = BindingBuffer::init(&layer_indices)
+			.label("draw_tile::instance_input_buffer")
+			.usage(wgpu::BufferUsages::VERTEX)
+			.create(pool.context.device());
 		render_pass.set_vertex_buffer(0, instance_input_buffer.slice(..));
 		render_pass.draw(vertices.clone(), 0..(layer_indices.len() as u32));
 	}
@@ -457,41 +454,25 @@ mod tests {
 		);
 
 		let texture_format = wgpu::TextureFormat::Rgba8Unorm;
-		let pipeline = context
-			.device()
-			.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-				label: None,
-				layout: Some(&layout),
-				vertex: wgpu::VertexState {
-					module: &module,
-					entry_point: shaders::atlas::ENTRY_VS_MAIN,
-					compilation_options: Default::default(),
-					buffers: &[InstanceInput::vertex_buffer_layout(
-						wgpu::VertexStepMode::Instance,
-					)],
-				},
-				fragment: Some(shaders::atlas::fragment_state(
-					&module,
-					&shaders::atlas::fs_main_entry([Some(wgpu::ColorTargetState {
-						format: texture_format,
-						blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-						write_mask: wgpu::ColorWrites::ALL,
-					})]),
-				)),
-				primitive: wgpu::PrimitiveState {
-					topology: wgpu::PrimitiveTopology::TriangleStrip,
-					strip_index_format: None,
-					front_face: wgpu::FrontFace::Ccw,
-					cull_mode: Some(wgpu::Face::Back),
-					polygon_mode: wgpu::PolygonMode::Fill,
-					unclipped_depth: false,
-					conservative: false,
-				},
-				depth_stencil: None,
-				multisample: wgpu::MultisampleState::default(),
-				multiview: None,
-				cache: None,
-			});
+		let pipeline = render::render_pipeline()
+			.layout(&layout)
+			.vertex(wgpu::VertexState {
+				module: &module,
+				entry_point: shaders::atlas::ENTRY_VS_MAIN,
+				compilation_options: Default::default(),
+				buffers: &[InstanceInput::vertex_buffer_layout(
+					wgpu::VertexStepMode::Instance,
+				)],
+			})
+			.fragment(shaders::atlas::fragment_state(
+				&module,
+				&shaders::atlas::fs_main_entry([Some(wgpu::ColorTargetState {
+					format: texture_format,
+					blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+					write_mask: wgpu::ColorWrites::ALL,
+				})]),
+			))
+			.create(context.device());
 
 		context.render_golden_commands(
 			"engine/tile/draw_tiles",

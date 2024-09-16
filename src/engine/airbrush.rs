@@ -1,9 +1,7 @@
-use crate::render::Resources;
+use crate::render::{BindingBuffer, Resources};
 use crate::shaders::airbrush::*;
 use crate::{render, util::PiecewiseLinear};
-use encase::ShaderType;
 use glam::{vec2, Vec2};
-use itertools::Itertools;
 use wgpu::util::DeviceExt;
 
 fn create_vertex_buffer(
@@ -25,53 +23,36 @@ fn create_pipeline(
 	shader: &render::Shader,
 	vertex_buffer_layout: wgpu::VertexBufferLayout<'_>,
 ) -> wgpu::RenderPipeline {
-	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-		label: Some("airbrush"),
-		layout: Some(&shader.layout),
-		vertex: wgpu::VertexState {
+	render::render_pipeline()
+		.label("airbrush")
+		.layout(&shader.layout)
+		.vertex(wgpu::VertexState {
 			module: &shader.module,
 			entry_point: ENTRY_VS_MAIN,
 			compilation_options: Default::default(),
 			buffers: &[vertex_buffer_layout],
-		},
-		fragment: Some(fragment_state(
+		})
+		.fragment(fragment_state(
 			&shader.module,
 			&fs_main_entry([Some(wgpu::ColorTargetState {
 				format: texture_format,
 				blend: Some(wgpu::BlendState::ALPHA_BLENDING),
 				write_mask: wgpu::ColorWrites::ALL,
 			})]),
-		)),
-		primitive: wgpu::PrimitiveState {
-			topology: wgpu::PrimitiveTopology::TriangleStrip,
-			strip_index_format: None,
-			front_face: wgpu::FrontFace::Ccw,
-			cull_mode: None,
-			polygon_mode: wgpu::PolygonMode::Fill,
-			unclipped_depth: false,
-			conservative: false,
-		},
-		depth_stencil: None,
-		multisample: wgpu::MultisampleState::default(),
-		multiview: None,
-		cache: None,
-	})
+		))
+		.create(device)
 }
 
 fn create_bind_group(
 	device: &wgpu::Device,
 	shape_texture: &wgpu::TextureView,
 	shape_sampler: &wgpu::Sampler,
-) -> (bind_groups::BindGroup0, wgpu::Buffer) {
+) -> (bind_groups::BindGroup0, BindingBuffer<AirbrushAction>) {
 	use bind_groups::*;
-	let contents: Vec<_> = std::iter::repeat(0u8)
-		.take(AirbrushAction::min_size().get() as usize)
-		.collect();
-	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-		label: Some("airbrush"),
-		contents: bytemuck::cast_slice(&contents),
-		usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-	});
+	let buffer = BindingBuffer::new_sized()
+		.label("airbrush")
+		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
+		.create(device);
 	let bind_group = BindGroup0::from_bindings(
 		device,
 		BindGroupLayout0 {
@@ -178,7 +159,7 @@ pub struct InputPoint {
 pub struct Airbrush {
 	pipeline: wgpu::RenderPipeline,
 	bind_group: bind_groups::BindGroup0,
-	action_buffer: wgpu::Buffer,
+	action_buffer: BindingBuffer<AirbrushAction>,
 	vertex_buffer: wgpu::Buffer,
 	last_point: Option<InputPoint>,
 }
@@ -245,14 +226,13 @@ impl Airbrush {
 		let r0 = last_point.rate * last_point.pressure.sqrt();
 		let r1 = point.rate * point.pressure.sqrt();
 
-		let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
-		contents
-			.write(&AirbrushAction {
+		self.action_buffer.write(
+			queue,
+			AirbrushAction {
 				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
 				color: point.color,
-			})
-			.unwrap();
-		queue.write_buffer(&self.action_buffer, 0, &contents.into_inner());
+			},
+		);
 
 		let shift_fraction = ((s0 - s1) * s0 / length).clamp(-1.0, 1.0);
 		let blend = if length > s0 + s1 {

@@ -111,37 +111,23 @@ impl WgpuTestContext {
 
 		use shaders::copy_scaled::*;
 		let module = &self.copy_scaled.module;
-		let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-			label: None,
-			layout: Some(&self.copy_scaled.layout),
-			vertex: wgpu::VertexState {
+		let pipeline = render::render_pipeline()
+			.layout(&self.copy_scaled.layout)
+			.vertex(wgpu::VertexState {
 				module,
 				entry_point: ENTRY_VS_MAIN,
 				compilation_options: Default::default(),
 				buffers: &[],
-			},
-			fragment: Some(fragment_state(
+			})
+			.fragment(fragment_state(
 				module,
 				&fs_main_entry([Some(wgpu::ColorTargetState {
 					format: destination.format(),
 					blend: Some(wgpu::BlendState::REPLACE),
 					write_mask: wgpu::ColorWrites::ALL,
 				})]),
-			)),
-			primitive: wgpu::PrimitiveState {
-				topology: wgpu::PrimitiveTopology::TriangleStrip,
-				strip_index_format: None,
-				front_face: wgpu::FrontFace::Ccw,
-				cull_mode: Some(wgpu::Face::Back),
-				polygon_mode: wgpu::PolygonMode::Fill,
-				unclipped_depth: false,
-				conservative: false,
-			},
-			depth_stencil: None,
-			multisample: wgpu::MultisampleState::default(),
-			multiview: None,
-			cache: None,
-		});
+			))
+			.create(device);
 		let bind_group = bind_groups::BindGroup0::from_bindings(
 			device,
 			bind_groups::BindGroupLayout0 {

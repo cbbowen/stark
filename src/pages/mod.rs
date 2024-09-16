@@ -5,8 +5,7 @@ use leptos::prelude::*;
 use leptos_meta::*;
 use leptos_router::components::A;
 use std::sync::Arc;
-use thaw::Body1;
-use util::{create_derived, create_local_derived};
+use util::create_derived;
 
 #[component]
 pub fn ShaderModulesProvider(children: Children) -> impl IntoView {

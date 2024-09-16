@@ -1,4 +1,7 @@
 #![feature(error_generic_member_access)]
+#![feature(generic_const_exprs)]
+#![feature(maybe_uninit_uninit_array)]
+#![feature(maybe_uninit_array_assume_init)]
 
 pub(crate) mod util;
 
