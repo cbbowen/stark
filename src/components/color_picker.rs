@@ -67,13 +67,13 @@ fn create_render_pipeline(
 #[component]
 pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 	// Create a lens into `color`.
-	let lightness = create_memo(move |_| color.get().x);
+	let lightness = Memo::new(move |_| color.get().x);
 	let set_lightness = move |l| color.update(|lab| lab.x = l);
 
 	let context: Arc<WgpuContext> = use_context().unwrap();
 	let resources: Arc<render::Resources> = use_context().unwrap();
 
-	let (texture_format, set_texture_format) = create_signal(None);
+	let (texture_format, set_texture_format) = signal(None);
 
 	let render_pipeline = {
 		let context = context.clone();
@@ -132,7 +132,7 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 				}
 				context.queue().submit([encoder.finish()]);
 			};
-			LocalCallback::new(callback)
+			Callback::new(callback)
 		})
 	};
 

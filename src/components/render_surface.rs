@@ -61,7 +61,7 @@ pub type ConfigureCallback = LocalCallback<ConfigureArgs, Option<wgpu::SurfaceCo
 
 pub type ConfiguredCallback = LocalCallback<wgpu::SurfaceConfiguration>;
 
-pub type RenderCallback = LocalCallback<wgpu::TextureView>;
+pub type RenderCallback = Callback<wgpu::TextureView>;
 
 #[component]
 pub fn RenderSurface(

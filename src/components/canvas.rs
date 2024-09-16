@@ -248,7 +248,7 @@ pub fn Canvas(
 				}
 				context.queue().submit([encoder.finish()]);
 			};
-			LocalCallback::new(callback)
+			Callback::new(callback)
 		})
 	};
 
