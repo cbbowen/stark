@@ -83,15 +83,18 @@ fn create_bind_group(
 	(bind_group, buffer)
 }
 
-pub fn preprocess_shape_row(data: impl IntoIterator<Item = f32>, opacity: f32) -> impl Iterator<Item = f32> {
+pub fn preprocess_shape_row(
+	data: impl IntoIterator<Item = f32>,
+	opacity: f32,
+) -> impl Iterator<Item = f32> {
 	let data = data.into_iter();
 	data
-	.map(move |v| ((-opacity * v.max(0.0)).ln_1p()))
-	.scan(0.0, move |sum, value| {
-		let result = Some((*sum + 0.5 * value).min(0.0));
-		*sum += value;
-		result
-	})
+		.map(move |v| ((-opacity * v.max(0.0)).ln_1p()))
+		.scan(0.0, move |sum, value| {
+			let result = Some((*sum + 0.5 * value).min(0.0));
+			*sum += value;
+			result
+		})
 }
 
 pub fn uniform_samples(size: u32) -> impl Iterator<Item = f32> {
@@ -104,17 +107,18 @@ pub fn centered_uniform_samples(size: u32) -> impl Iterator<Item = f32> {
 }
 
 pub fn generate_shape_row(y: f32, width: u32) -> impl Iterator<Item = f32> {
-	centered_uniform_samples(width).map(move |x| (1.0 - x * x - y * y).max(0.0))
+	const SHAPE: f32 = 1.0;
+	centered_uniform_samples(width).map(move |x| (1.0 - (x * x + y * y).powf(SHAPE)).max(0.0))
 }
 
 fn create_shape_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
 	let size = 64u32;
 	let opacity_levels = 8;
 
-	let data =
-		uniform_samples(opacity_levels).flat_map(move |opacity| 
-			centered_uniform_samples(size).flat_map(
-				move |y| preprocess_shape_row(generate_shape_row(y, size), opacity)));
+	let data = uniform_samples(opacity_levels).flat_map(move |opacity| {
+		centered_uniform_samples(size)
+			.flat_map(move |y| preprocess_shape_row(generate_shape_row(y, size), opacity))
+	});
 
 	// let format = wgpu::TextureFormat::R8Snorm;
 	// let data = data.map(|v| (v.clamp(-1.0, 1.0) * 127.0) as i8);
@@ -266,7 +270,10 @@ impl Airbrush {
 			} else {
 				(0.0, 1.0)
 			};
-			PiecewiseLinear::new([(0.0 - (s0 + b0 * (s1 - s0)), b0), (length + (s0 + b1 * (s1 - s0)), b1)])
+			PiecewiseLinear::new([
+				(0.0 - (s0 + b0 * (s1 - s0)), b0),
+				(length + (s0 + b1 * (s1 - s0)), b1),
+			])
 		};
 		let blend = blend.unwrap();
 
@@ -283,7 +290,10 @@ impl Airbrush {
 		let (u_start, u_end) = (u_start.unwrap(), u_end.unwrap());
 
 		let u_bounds = u_start.bilinear_map(&u_end, vec2);
-		let events = blend.map_merged_inflection_points(&u_bounds, move |distance, blend, u_bounds| (distance, blend, u_bounds));
+		let events = blend
+			.map_merged_inflection_points(&u_bounds, move |distance, blend, u_bounds| {
+				(distance, blend, u_bounds)
+			});
 
 		let mut vertices = Vec::with_capacity(12);
 		for (distance, blend, u_bounds) in events {

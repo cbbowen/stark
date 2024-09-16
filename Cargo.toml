@@ -50,7 +50,7 @@ web-sys = { version = "0.3", features = [
 ] }
 pollster = "0.3"
 png = "0.17"
-image = { version = "0.25", default_features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 # I'm not sure what the best way to configure dependencies is. In theory,
 # targeting WASM and running in the client are orthogonal. For now, we put

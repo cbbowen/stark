@@ -6,6 +6,7 @@ use leptos_meta::*;
 use leptos_router::components::A;
 use std::sync::Arc;
 use thaw::Body1;
+use util::{create_derived, create_local_derived};
 
 #[component]
 pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
@@ -19,9 +20,14 @@ pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
 #[component]
 pub fn Home() -> impl IntoView {
 	let brush_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
-	let brush_size = RwSignal::new(0.1);
+	let input_brush_size = RwSignal::new(1.0 / 4.0);
 	let brush_opacity = RwSignal::new(1.0);
 	let brush_rate = RwSignal::new(0.5);
+
+	let brush_size = create_derived(move || {
+		let input_brush_size = input_brush_size.get();
+		input_brush_size * input_brush_size
+	});
 
 	view! {
 		<Title text="Home"/>
@@ -47,11 +53,11 @@ pub fn Home() -> impl IntoView {
 						<Panel title="Brush">
 							<BrushSetting name="Size">
 								<thaw::Slider
-									value=brush_size
-									min=0.0
-									max=0.25
-									step=0.01
-								/>
+									value=input_brush_size
+									min=1.0 / 64.0
+									max=1.0
+									step=1.0 / 64.0
+								></thaw::Slider>
 							</BrushSetting>
 							<BrushSetting name="Opacity">
 								<thaw::Slider
@@ -59,7 +65,7 @@ pub fn Home() -> impl IntoView {
 									min=0.0
 									max=1.0
 									step=0.05
-								/>
+								></thaw::Slider>
 							</BrushSetting>
 							<BrushSetting name="Rate">
 								<thaw::Slider
@@ -67,7 +73,7 @@ pub fn Home() -> impl IntoView {
 									min=0.05
 									max=2.0
 									step=0.05
-								/>
+								></thaw::Slider>
 							</BrushSetting>
 						</Panel>
 
