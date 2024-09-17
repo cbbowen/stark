@@ -1,8 +1,8 @@
 use super::render_surface;
-use crate::shaders::{color_picker::*};
+use crate::render::BindingBuffer;
+use crate::shaders::color_picker::*;
 use crate::util::*;
 use crate::{render, WgpuContext};
-use crate::render::BindingBuffer;
 use itertools::Itertools;
 use leptos::prelude::*;
 use leptos::{component, view, IntoView};
@@ -111,7 +111,7 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 					});
 					render_pass.set_pipeline(&render_pipeline);
 					bind_group.set(&mut render_pass);
-					// TODO: Pass in uniforms for the camera.
+					// TODO: Pass in uniforms for the "camera".
 					render_pass.draw(0..4, 0..1);
 				}
 				context.queue().submit([encoder.finish()]);

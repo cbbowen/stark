@@ -7,5 +7,5 @@ pub fn BrushSetting(#[prop(into)] name: String, children: Children) -> impl Into
 			<span class="BrushSettingName">{name}</span>
 			{children()}
 		</div>
-	}	
+	}
 }

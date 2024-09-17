@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
-async-once-cell = "0.5"
 futures = "0.3"
 itertools = "0.13"
 leptos = { version = "0.7.0-beta5" }
@@ -40,6 +39,8 @@ csscolorparser = "0.7"
 half = { version = "2.4", features = ["bytemuck"] }
 ordered-float = { version = "4.2", features = ["bytemuck"] }
 bon = "2.3"
+png = { version = "0.17", optional = true }
+base64 = { version = "0.22", optional = true }
 
 [dev-dependencies]
 wasm-bindgen = "0.2"
@@ -50,8 +51,8 @@ web-sys = { version = "0.3", features = [
 	"ResizeObserverSize",
 ] }
 pollster = "0.3"
-png = "0.17"
 image = { version = "0.25", default-features = false, features = ["png"] }
+png = { version = "0.17" }
 
 # I'm not sure what the best way to configure dependencies is. In theory,
 # targeting WASM and running in the client are orthogonal. For now, we put
@@ -72,6 +73,10 @@ csr = [
 # Enable the "log" feature only if we include libraries that depend on it.
 # Our code will use "tracing" exclusively.
 log = ["dep:log", "dep:tracing-log", "tracing/log"]
+debug = ["dep:png", "dep:base64"]
+
+[profile.test]
+default = ["debug"]
 
 [profile.min-size-release]
 inherits = "release"

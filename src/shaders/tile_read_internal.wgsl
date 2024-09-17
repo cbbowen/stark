@@ -1,4 +1,7 @@
-include!("chart.wgsl") {}
+@group(0) @binding(0)
+var<uniform> _unused: u32;
+
+include!("tile_read.wgsl") {}
 
 @vertex
 fn vs_main(

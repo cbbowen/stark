@@ -57,13 +57,13 @@ impl<Y> From<(f32, Y)> for Point<Y> {
 
 impl<Y> Into<(f32, Y)> for Point<Y> {
 	fn into(self) -> (f32, Y) {
-		 (*self.x, self.y)
+		(*self.x, self.y)
 	}
 }
 
 impl<'a, Y> Into<(f32, &'a Y)> for &'a Point<Y> {
 	fn into(self) -> (f32, &'a Y) {
-		 (*self.x, &self.y)
+		(*self.x, &self.y)
 	}
 }
 
@@ -196,8 +196,9 @@ impl<Y: Interpolable> PiecewiseLinear<Y> {
 		}
 	}
 
-	// This essentially allows composing piecewise functions, but the interface is currently too tricky to expose.
-	fn zip_flat_piece_map<Z: Interpolable, V, VIter: Iterator<Item=V>>(
+	// This essentially allows composing piecewise functions, but the interface is currently too
+	// tricky to expose.
+	fn zip_flat_piece_map<Z: Interpolable, V, VIter: Iterator<Item = V>>(
 		&self,
 		other: &PiecewiseLinear<Z>,
 		f: impl Fn(Range<f32>, &Linear<Y>, &Linear<Z>) -> VIter,
@@ -226,19 +227,26 @@ impl<Y: Interpolable> PiecewiseLinear<Y> {
 				z_piece = it_z.next();
 				let Some(y_piece) = &y_piece else { continue };
 				let Some(z_piece) = &z_piece else { continue };
-				let domain = y_piece.domain.start.max(z_piece.domain.start)..y_piece.domain.end.min(z_piece.domain.end);
+				let domain = y_piece.domain.start.max(z_piece.domain.start)
+					..y_piece.domain.end.min(z_piece.domain.end);
 				points.extend(f(domain, &y_piece.extension, &z_piece.extension));
 			}
 		}
 		points
 	}
 
-	fn zip_flat_piece_linear_map<Z: Interpolable, W: Interpolable, WPoints: Iterator<Item=(f32, W)>>(
+	fn zip_flat_piece_linear_map<
+		Z: Interpolable,
+		W: Interpolable,
+		WPoints: Iterator<Item = (f32, W)>,
+	>(
 		&self,
 		other: &PiecewiseLinear<Z>,
 		f: impl Fn(Range<f32>, &Linear<Y>, &Linear<Z>) -> WPoints,
 	) -> PiecewiseLinear<W> {
-		PiecewiseLinear { points: self.zip_flat_piece_map(other, move |d, y, z| f(d, y, z).map(Point::from)) }
+		PiecewiseLinear {
+			points: self.zip_flat_piece_map(other, move |d, y, z| f(d, y, z).map(Point::from)),
+		}
 	}
 
 	pub fn bilinear_map<Z: Interpolable, W: Interpolable>(
@@ -254,7 +262,7 @@ impl<Y: Interpolable> PiecewiseLinear<Y> {
 		})
 	}
 
-	pub fn inflection_points<'a>(&'a self) -> impl Iterator<Item=(f32, &'a Y)> {
+	pub fn inflection_points<'a>(&'a self) -> impl Iterator<Item = (f32, &'a Y)> {
 		self.points.iter().map(move |p| p.into())
 	}
 
@@ -271,22 +279,17 @@ impl<Y: Interpolable> PiecewiseLinear<Y> {
 		other: &PiecewiseLinear<Z>,
 		f: impl Fn(f32, Y, Z) -> V,
 	) -> Vec<V> {
-		self.zip_flat_piece_map(
-			other, move |domain, y_linear, z_linear| {
-				let x = domain.start;
-				let y = y_linear.evaluate(x);
-				let z = z_linear.evaluate(x);
-				std::iter::once(f(x, y, z))
-			}
-		)
+		self.zip_flat_piece_map(other, move |domain, y_linear, z_linear| {
+			let x = domain.start;
+			let y = y_linear.evaluate(x);
+			let z = z_linear.evaluate(x);
+			std::iter::once(f(x, y, z))
+		})
 	}
 }
 
 impl PiecewiseLinear<f32> {
-	pub fn pointwise_max(
-		&self,
-		other: &Self,
-	) -> Self {
+	pub fn pointwise_max(&self, other: &Self) -> Self {
 		self.zip_flat_piece_linear_map(other, move |domain, y_linear, z_linear| {
 			let x = domain.start;
 			let y = y_linear.evaluate(x);
@@ -308,10 +311,7 @@ impl PiecewiseLinear<f32> {
 		})
 	}
 
-	pub fn pointwise_min(
-		&self,
-		other: &Self,
-	) -> Self {
+	pub fn pointwise_min(&self, other: &Self) -> Self {
 		self.zip_flat_piece_linear_map(other, move |domain, y_linear, z_linear| {
 			let x = domain.start;
 			let y = y_linear.evaluate(x);
@@ -422,7 +422,7 @@ mod tests {
 			assert!(c.evaluate(x) - epsilon < a.evaluate(x).max(b.evaluate(x)));
 		}
 
-		let c  = b.pointwise_max(&a);
+		let c = b.pointwise_max(&a);
 		for x in [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0] {
 			assert!(c.evaluate(x) + epsilon > a.evaluate(x).max(b.evaluate(x)));
 			assert!(c.evaluate(x) - epsilon < a.evaluate(x).max(b.evaluate(x)));
@@ -442,7 +442,7 @@ mod tests {
 			assert!(c.evaluate(x) - epsilon < a.evaluate(x).min(b.evaluate(x)));
 		}
 
-		let c  = b.pointwise_min(&a);
+		let c = b.pointwise_min(&a);
 		for x in [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0] {
 			assert!(c.evaluate(x) + epsilon > a.evaluate(x).min(b.evaluate(x)));
 			assert!(c.evaluate(x) - epsilon < a.evaluate(x).min(b.evaluate(x)));

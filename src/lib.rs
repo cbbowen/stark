@@ -15,6 +15,8 @@ pub mod shaders;
 mod wgpu_context;
 pub use wgpu_context::*;
 
+pub mod debug;
+
 #[cfg(test)]
 pub mod test;
 
@@ -33,7 +35,8 @@ pub fn App() -> impl IntoView {
 		<thaw::ConfigProvider theme=theme>
 			<Router>
 				<Routes fallback=pages::NotFound>
-					// TODO: Figure out best to handle routes. When deployed on Github pages, this will be under /stark, but when testing locally with trunk, it won't.
+					// TODO: Figure out how best to handle routes. When deployed on Github pages,
+					// this will be under /stark, but when testing locally with trunk, it won't.
 					<Route path=path!("/stark") view=pages::Home/>
 					<Route path=path!("/*") view=|| view! { <Redirect path="/stark"/> }/>
 				</Routes>

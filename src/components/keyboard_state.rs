@@ -1,5 +1,5 @@
-use leptos::prelude::*;
 use leptos::context::provide_context;
+use leptos::prelude::*;
 use leptos_use::use_window;
 use std::{collections::HashSet, sync::Arc, sync::RwLock};
 
@@ -58,7 +58,7 @@ pub fn KeyboardStateProvider(children: Children) -> impl IntoView {
 			state.clear();
 		}
 	};
- 
+
 	Effect::new(move |_| use_window().as_ref().map(|window| window.focus()));
 
 	let keydown_handle = window_event_listener(leptos::ev::keydown, keydown);

@@ -1,3 +1,7 @@
+use std::{future::Future, sync::Arc};
+
+use crate::util::DeviceExt as _;
+
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum WgpuContextError {
 	#[error("request adapter error")]
@@ -19,7 +23,7 @@ impl From<wgpu::RequestDeviceError> for WgpuContextError {
 pub struct WgpuContext {
 	instance: wgpu::Instance,
 	adapter: wgpu::Adapter,
-	device: wgpu::Device,
+	device: Arc<wgpu::Device>,
 	queue: wgpu::Queue,
 }
 
@@ -42,19 +46,21 @@ impl WgpuContext {
 			.request_device(
 				&wgpu::DeviceDescriptor {
 					required_features: wgpu::Features::default()
-						| wgpu::Features::INDIRECT_FIRST_INSTANCE
-						// This could be useful, but I think we can get away with 16-bit floats for now.
-						// | FLOAT32_FILTERABLE
-						// This would be convenient for brush shapes, but it's currently native-only.
-						// | wgpu::Features::ADDRESS_MODE_CLAMP_TO_ZERO
-						,
-					
+						| wgpu::Features::INDIRECT_FIRST_INSTANCE, /* This could be useful, but I think
+					                                             * we can get away with 16-bit floats
+					                                             * for now.
+					                                             * | FLOAT32_FILTERABLE
+					                                             * This would be convenient for brush
+					                                             * shapes, but it's currently
+					                                             * native-only.
+					                                             * | wgpu::Features::ADDRESS_MODE_CLAMP_TO_ZERO */
 					..Default::default()
 				},
 				None,
 			)
 			.await?;
 		tracing::info!(?device);
+		let device = Arc::new(device);
 
 		Ok(Self {
 			instance,
@@ -72,19 +78,84 @@ impl WgpuContext {
 		&self.adapter
 	}
 
-	pub fn device(&self) -> &wgpu::Device {
+	pub fn device(&self) -> &Arc<wgpu::Device> {
 		&self.device
 	}
 
 	pub fn queue(&self) -> &wgpu::Queue {
 		&self.queue
 	}
+
+	pub fn get_buffer_data(
+		&self,
+		buffer: std::sync::Arc<wgpu::Buffer>,
+	) -> impl Future<Output = anyhow::Result<Vec<u8>>> {
+		self.device.clone().get_buffer_data(buffer)
+	}
+
+	pub fn get_texture_layer_data(
+		&self,
+		texture: &wgpu::Texture,
+		layer_index: u32,
+	) -> impl Future<Output = anyhow::Result<Vec<u8>>> {
+		let aspect = wgpu::TextureAspect::All;
+		let (block_width, block_height) = texture.format().block_dimensions();
+		let bytes_per_row =
+			texture.format().block_copy_size(Some(aspect)).unwrap() * (texture.width() / block_width);
+		let rows_per_image = texture.height() / block_height;
+		let row_stride = wgpu::util::align_to(bytes_per_row, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
+
+		let device = self.device().clone();
+		let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+			label: None,
+			size: (row_stride * texture.height()) as wgpu::BufferAddress,
+			usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+			mapped_at_creation: false,
+		});
+		let mut encoder = device.create_command_encoder(&Default::default());
+		let mip_level = 0;
+		let layer_size = wgpu::Extent3d {
+			depth_or_array_layers: 1u32,
+			..texture.size()
+		};
+		encoder.copy_texture_to_buffer(
+			wgpu::ImageCopyTexture {
+				texture,
+				mip_level,
+				origin: wgpu::Origin3d {
+					x: 0,
+					y: 0,
+					z: layer_index,
+				},
+				aspect,
+			},
+			wgpu::ImageCopyBuffer {
+				buffer: &buffer,
+				layout: wgpu::ImageDataLayout {
+					offset: 0,
+					bytes_per_row: Some(row_stride),
+					rows_per_image: Some(rows_per_image),
+				},
+			},
+			layer_size.mip_level_size(mip_level, texture.dimension()),
+		);
+		self.queue().submit([encoder.finish()]);
+
+		let buffer = Arc::new(buffer);
+		async move {
+			Ok(device
+				.get_buffer_data(buffer)
+				.await?
+				.chunks_exact(row_stride as usize)
+				.flat_map(|row| &row[..bytes_per_row as usize])
+				.copied()
+				.collect())
+		}
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	
-
 	use crate::*;
 
 	#[test]
@@ -117,8 +188,7 @@ mod tests {
 	#[test]
 	fn create_image_texture() -> anyhow::Result<()> {
 		let context = test::WgpuTestContext::new()?;
-		let texture =
-			context.create_image_texture("test/output/wgpu_context/create_image_texture.png")?;
+		let texture = context.create_image_texture("test/input/cs-gray-7f7f7f.png")?;
 		context.golden_texture(
 			"wgpu_context/create_image_texture",
 			test::GoldenOptions::default(),

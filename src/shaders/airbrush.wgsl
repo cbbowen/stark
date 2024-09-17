@@ -6,11 +6,12 @@ struct AirbrushAction {
 };
 @group(0) @binding(0)
 var<uniform> action: AirbrushAction;
-
 @group(0) @binding(1)
 var shape_texture: texture_3d<f32>;
 @group(0) @binding(2)
 var shape_sampler: sampler;
+
+include!("tile_write.wgsl") {}
 
 struct VertexInput {
 	@builtin(vertex_index) vertex_index: u32,
@@ -32,7 +33,10 @@ fn vs_main(
     in: VertexInput,
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.position = vec4(vec2(2.0, -2.0) * (in.position - 0.5), 0.0, 1.0);
+	 let canvas_position = in.position;
+	 let layer_tile_data = tile_data[layer_index];
+	 let chart_position = (canvas_position - layer_tile_data.chart_to_canvas_translation) / layer_tile_data.chart_to_canvas_scale;
+    out.position = vec4(vec2(2.0, -2.0) * (chart_position - 0.5), 0.0, 1.0);
     out.u_bounds = in.u_bounds;
     out.vw = vec2(f32(in.vertex_index & 1), in.opacity);
 	 out.rate = in.rate;

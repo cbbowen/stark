@@ -51,7 +51,7 @@ pub struct BindingBuffer<T: ?Sized> {
 	_t: std::marker::PhantomData<T>,
 }
 
-impl<T> Deref for BindingBuffer<T> {
+impl<T: ?Sized> Deref for BindingBuffer<T> {
 	type Target = wgpu::Buffer;
 	fn deref(&self) -> &Self::Target {
 		&self.buffer
@@ -84,7 +84,7 @@ impl<T: ?Sized + encase::ShaderType + encase::internal::WriteInto> BindingBuffer
 	fn value_to_data(values: &T) -> impl Borrow<[u8]> {
 		let size = T::size(values).get() as usize;
 		let data = Vec::<u8>::with_capacity(size);
-		let mut data = encase::UniformBuffer::new(data);
+		let mut data = encase::StorageBuffer::new(data);
 		data.write(values).unwrap();
 		data.into_inner()
 	}
@@ -123,7 +123,7 @@ where
 {
 	fn sized_value_to_data(value: &T) -> impl Borrow<[u8]> {
 		let data = MaybeUninit::uninit_array::<{ T::SHADER_SIZE.get() as usize }>();
-		let mut data = encase::UniformBuffer::new(data);
+		let mut data = encase::StorageBuffer::new(data);
 		data.write(value).unwrap();
 		let data = data.into_inner();
 
@@ -206,15 +206,37 @@ impl<T: ?Sized + encase::CalculateSizeFor> BindingBuffer<T> {
 impl<T: ?Sized + encase::ShaderType + encase::CalculateSizeFor + encase::internal::WriteInto>
 	BindingBuffer<T>
 {
-	pub fn write_slice(&self, queue: &wgpu::Queue, offset: u64, values: impl Borrow<T>) {
-		let offset = if offset == 0 {
+	pub fn raw_offset(offset: u64) -> u64 {
+		// `calculate_size_for` has surprising semantics for zero-length arrays, so we have to
+		// special-case the zero index.
+		if offset == 0 {
 			0
 		} else {
 			T::calculate_size_for(offset).get()
-		};
+		}
+	}
+
+	// TODO: It would be nice to support `impl std::ops::RangeBounds<u64>`.
+	pub fn slice(&self, range: std::ops::Range<u64>) -> wgpu::BufferSlice<'_> {
+		self
+			.buffer
+			.slice(Self::raw_offset(range.start)..Self::raw_offset(range.end))
+	}
+
+	pub fn slice_binding(&self, range: std::ops::Range<u64>) -> wgpu::BufferBinding<'_> {
+		let size = T::calculate_size_for(range.end - range.start);
+		let offset = Self::raw_offset(range.start);
+		wgpu::BufferBinding {
+			buffer: &self.buffer,
+			offset,
+			size: Some(size),
+		}
+	}
+
+	pub fn write_slice(&self, queue: &wgpu::Queue, offset: u64, values: impl Borrow<T>) {
 		queue.write_buffer(
 			&self.buffer,
-			offset,
+			Self::raw_offset(offset),
 			Self::value_to_data(values.borrow()).borrow(),
 		)
 	}

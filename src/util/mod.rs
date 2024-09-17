@@ -26,31 +26,37 @@ pub use oklab::*;
 mod piecewise_linear;
 pub use piecewise_linear::*;
 
+mod callback_future;
+pub use callback_future::*;
+
 use leptos::wasm_bindgen;
 use leptos::web_sys;
 use wasm_bindgen::JsCast;
 use wgpu::Extent3d;
 
-use std::sync::Arc;
 use std::rc::Rc;
-
+use std::sync::Arc;
 
 #[derive(Clone, Copy)]
 pub struct Unequal<T>(T);
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Unequal<T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		 self.0.fmt(f)
+		self.0.fmt(f)
 	}
 }
 
 impl<T> PartialEq for Unequal<T> {
-	fn eq(&self, _other: &Self) -> bool { false }
+	fn eq(&self, _other: &Self) -> bool {
+		false
+	}
 }
 
 impl<T> std::ops::Deref for Unequal<T> {
 	type Target = T;
-	fn deref(&self) -> &Self::Target { &self.0 }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 /// It is useful to think of signals as having two channels:
@@ -64,48 +70,52 @@ impl<T> std::ops::Deref for Unequal<T> {
 /// implement `PartialEq` which is not always possible. In others, e.g. `Trigger`, it is actively
 /// undesirable. Leptos used to provide a lower-level primitive that made it trivial to separate
 /// the two, but 0.7 introduced a (completely unnecessary) `PartialEq` bound on those.
-pub fn create_derived<T: Clone + Send + Sync + 'static>(f: impl Fn() -> T + Send + Sync + 'static) -> Signal<T> {
+pub fn create_derived<T: Clone + Send + Sync + 'static>(
+	f: impl Fn() -> T + Send + Sync + 'static,
+) -> Signal<T> {
 	let memo = Memo::new_owning(move |_| (Unequal(f()), true));
 	Signal::derive(move || memo.with(|m| m.0.clone()))
 }
 
-pub fn create_local_derived<T: Clone + 'static>(f: impl Fn() -> T + 'static) -> Signal<T, LocalStorage> {
+pub fn create_local_derived<T: Clone + 'static>(
+	f: impl Fn() -> T + 'static,
+) -> Signal<T, LocalStorage> {
 	use send_wrapper::SendWrapper;
 	// Ideally, we would just use a `Memo` with `LocalStorage` here, but that isn't implemented yet.
-	let f= SendWrapper::new(f);
+	let f = SendWrapper::new(f);
 	let f = move || f();
 	let memo = Memo::new_owning(move |_| (Unequal(SendWrapper::new(f())), true));
 	Signal::derive_local(move || memo.with(|m| (*m.0).clone()))
 }
 
 pub struct LocalCallback<In: 'static, Out: 'static = ()>(
-	StoredValue<Box<dyn Fn(In) -> Out>, LocalStorage>
+	StoredValue<Box<dyn Fn(In) -> Out>, LocalStorage>,
 );
 
 impl<In, Out> Copy for LocalCallback<In, Out> {}
 impl<In, Out> Clone for LocalCallback<In, Out> {
 	fn clone(&self) -> Self {
-		 *self
+		*self
 	}
 }
 
 impl<In, Out> LocalCallback<In, Out> {
 	pub fn new(value: impl Fn(In) -> Out + 'static) -> Self {
-		 Self(StoredValue::new_local(Box::new(value)))
+		Self(StoredValue::new_local(Box::new(value)))
 	}
 }
 
 impl<In, Out, F: Fn(In) -> Out + 'static> From<F> for LocalCallback<In, Out> {
 	fn from(value: F) -> Self {
-		 Self::new(value)
+		Self::new(value)
 	}
 }
 
 impl<In, Out> leptos::prelude::Callable<In, Out> for LocalCallback<In, Out> {
 	fn run(&self, input: In) -> Out {
-		 self.0.with_value(|f| f(input))
+		self.0.with_value(|f| f(input))
 	}
-} 
+}
 
 #[derive(thiserror::Error, Debug)]
 #[error("javascript error")]
@@ -226,6 +236,29 @@ impl CoordinateSource for leptos::ev::WheelEvent {
 	}
 }
 
+pub trait DeviceExt {
+	fn get_buffer_data(
+		self: Arc<Self>,
+		buffer: std::sync::Arc<wgpu::Buffer>,
+	) -> impl std::future::Future<Output = anyhow::Result<Vec<u8>>>;
+}
+
+impl DeviceExt for wgpu::Device {
+	fn get_buffer_data(
+		self: Arc<Self>,
+		buffer: std::sync::Arc<wgpu::Buffer>,
+	) -> impl std::future::Future<Output = anyhow::Result<Vec<u8>>> {
+		async move {
+			let slice = buffer.slice(..);
+			let (map_async_future, callback) = CallbackFuture::new();
+			slice.map_async(wgpu::MapMode::Read, callback);
+			self.poll(wgpu::Maintain::wait());
+			map_async_future.await?;
+			Ok(slice.get_mapped_range().to_vec())
+		}
+	}
+}
+
 pub trait QueueExt {
 	fn fill_texture_layer(&self, texture: &wgpu::Texture, pixel_data: &[u8], layer_index: u32);
 	fn fill_texture(&self, texture: &wgpu::Texture, pixel_data: &[u8]) {
@@ -287,17 +320,12 @@ fn animation_frame_throttle_filter<R>(
 	}
 }
 
-pub fn use_animation_frame_throttle<F, R>(
-	func: F,
-) -> impl Fn() -> Arc<Mutex<Option<R>>> + Clone
+pub fn use_animation_frame_throttle<F, R>(func: F) -> impl Fn() -> Arc<Mutex<Option<R>>> + Clone
 where
 	F: Fn() -> R + Clone + 'static,
 	R: 'static,
 {
-	leptos_use::utils::create_filter_wrapper(
-		Arc::new(animation_frame_throttle_filter()),
-		func,
-	)
+	leptos_use::utils::create_filter_wrapper(Arc::new(animation_frame_throttle_filter()), func)
 }
 
 pub fn use_animation_frame_throttle_with_arg<F, Arg, R>(

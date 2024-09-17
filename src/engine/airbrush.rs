@@ -1,7 +1,9 @@
+use crate::engine::atlas;
 use crate::render::{BindingBuffer, Resources};
 use crate::shaders::airbrush::*;
 use crate::{render, util::PiecewiseLinear};
 use glam::{vec2, Vec2};
+use itertools::Itertools;
 use wgpu::util::DeviceExt;
 
 fn create_vertex_buffer(
@@ -167,6 +169,7 @@ pub struct Airbrush {
 pub struct AirbrushDrawable<'tool> {
 	tool: &'tool Airbrush,
 	vertex_count: u32,
+	chart_keys: Vec<atlas::ChartKey>,
 }
 
 impl Airbrush {
@@ -226,13 +229,11 @@ impl Airbrush {
 		let r0 = last_point.rate * last_point.pressure.sqrt();
 		let r1 = point.rate * point.pressure.sqrt();
 
-		self.action_buffer.write(
-			queue,
-			AirbrushAction {
-				seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
-				color: point.color,
-			},
-		);
+		let action = AirbrushAction {
+			seed: glam::Vec2::new(fastrand::f32(), fastrand::f32()),
+			color: point.color,
+		};
+		self.action_buffer.write(queue, action);
 
 		let shift_fraction = ((s0 - s1) * s0 / length).clamp(-1.0, 1.0);
 		let blend = if length > s0 + s1 {
@@ -298,9 +299,12 @@ impl Airbrush {
 		}
 		queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
 
+		let chart_keys = get_triangle_strip_chart_keys(vertices.iter().map(|v| v.position)).collect();
+
 		Some(AirbrushDrawable {
 			tool: self,
 			vertex_count: vertices.len() as u32,
+			chart_keys,
 		})
 	}
 
@@ -309,22 +313,40 @@ impl Airbrush {
 	}
 }
 
+fn get_triangle_strip_chart_keys(
+	vertices: impl IntoIterator<Item = Vec2>,
+) -> impl Iterator<Item = atlas::ChartKey> {
+	let triangles = vertices.into_iter().tuple_windows();
+	triangles
+		.flat_map(|(a, b, c)| {
+			// TODO: Implement this.
+			[]
+		})
+		.collect::<std::collections::HashSet<_>>()
+		.into_iter()
+}
+
 impl<'tool> AirbrushDrawable<'tool> {
+	pub fn get_chart_keys(&self) -> impl IntoIterator<Item = &atlas::ChartKey> {
+		self.chart_keys.iter()
+	}
+
 	pub fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {
 		render_pass.set_pipeline(&self.tool.pipeline);
 		self.tool.bind_group.set(render_pass);
 		render_pass.set_vertex_buffer(0, self.tool.vertex_buffer.slice(..));
-		// TODO: Pass in uniforms for the position and other parameters.
-		// https://sotrh.github.io/learn-wgpu/beginner/tutorial6-uniforms/#uniform-buffers-and-bind-groups
 		render_pass.draw(0..self.vertex_count, 0..1);
 	}
 }
 
 #[cfg(test)]
 mod tests {
+	use glam::*;
 	use itertools::Itertools;
 
 	use super::*;
+	use crate::render::*;
+	use crate::test;
 
 	#[test]
 	fn shape() {
@@ -342,5 +364,73 @@ mod tests {
 			let shape = preprocess_shape_row(generate_shape_row(0.0, 8), opacity).collect_vec();
 			println!("  {shape:?}");
 		}
+	}
+
+	#[test]
+	fn draw() -> anyhow::Result<()> {
+		let context = test::WgpuTestContext::new()?;
+		let device = context.device();
+		let queue = context.queue();
+
+		let resources = Resources::new(device);
+
+		let texture_format = wgpu::TextureFormat::Rgba8Unorm;
+		let mut airbrush = Airbrush::new(device, queue, &resources, texture_format);
+
+		let tile_data = TileData {
+			chart_to_canvas_scale: Vec2::ONE,
+			chart_to_canvas_translation: Vec2::ZERO,
+		};
+		let tile_data_buffer = BindingBuffer::init_sized(&tile_data).create(device);
+		let layer_index_buffer = BindingBuffer::init_sized(&0u32).create(device);
+		let tile_data_bind_group = bind_groups::BindGroup1::from_bindings(
+			device,
+			bind_groups::BindGroupLayout1 {
+				tile_data: tile_data_buffer.as_entire_buffer_binding(),
+				layer_index: layer_index_buffer.as_entire_buffer_binding(),
+			},
+		);
+
+		airbrush.start();
+
+		let input_point = InputPoint {
+			position: vec2(0.3, 0.3),
+			pressure: 0.5f32,
+			color: Vec3::ONE,
+			size: 0.3f32,
+			opacity: 1f32,
+			rate: 1f32,
+		};
+		assert!(airbrush.drag(queue, input_point.clone()).is_none());
+
+		let input_point = InputPoint {
+			position: vec2(0.9, 0.9),
+			size: 0.1f32,
+			..input_point
+		};
+		let drawable = airbrush.drag(queue, input_point.clone()).unwrap();
+
+		context.render_golden_commands(
+			"engine/airbrush/draw",
+			test::GoldenOptions {
+				texture_format,
+				..Default::default()
+			},
+			move |view, encoder| {
+				let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+					color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+						view: &view,
+						resolve_target: None,
+						ops: wgpu::Operations {
+							load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+							store: wgpu::StoreOp::Store,
+						},
+					})],
+					..Default::default()
+				});
+				tile_data_bind_group.set(&mut render_pass);
+				drawable.draw(&mut render_pass);
+			},
+		)
 	}
 }

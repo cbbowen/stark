@@ -1,8 +1,8 @@
 use super::tile::{self, TextureLayerDescriptor};
-use crate::shaders::atlas::bind_groups::{BindGroup0, BindGroupLayout0};
-use crate::shaders::atlas::*;
+use super::Extent2d;
+use crate::shaders::TileData;
 use crate::WgpuContext;
-use glam::Vec2;
+use glam::*;
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -50,11 +50,11 @@ impl AABox {
 	}
 }
 
-const CHART_SIZE: u32 = 256;
-const CHART_SCALE: f32 = CHART_SIZE as f32;
+pub const CHART_SIZE: u32 = 256;
+pub const CHART_SCALE: f32 = CHART_SIZE as f32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct ChartKey(i32, i32);
+pub struct ChartKey(pub i32, pub i32);
 
 impl ChartKey {
 	pub fn find_containing(p: glam::Vec2) -> Self {
@@ -72,64 +72,86 @@ impl ChartKey {
 			.map(|(x, y)| ChartKey(x, y))
 	}
 
-	pub fn chart_to_image(&self) -> glam::Affine2 {
-		glam::Affine2::from_mat2_translation(
-			CHART_SCALE * glam::Mat2::IDENTITY,
-			glam::Vec2::new(CHART_SCALE * self.0 as f32, CHART_SCALE * self.1 as f32),
+	pub fn chart_to_canvas_scale_and_translation(&self) -> (Vec2, Vec2) {
+		let scale = vec2(CHART_SCALE, CHART_SCALE);
+		(scale, scale * vec2(self.0 as f32, self.1 as f32))
+	}
+
+	pub fn chart_to_canvas(&self) -> Affine2 {
+		let (scale, translation) = self.chart_to_canvas_scale_and_translation();
+		Affine2::from_mat2_translation(Mat2::from_diagonal(scale), translation)
+	}
+
+	pub fn chart_to_canvas_mat4(&self) -> Mat4 {
+		let (scale, translation) = self.chart_to_canvas_scale_and_translation();
+		Mat4::from_scale_rotation_translation(
+			vec3(scale.x, scale.y, 1.0),
+			Quat::IDENTITY,
+			vec3(translation.x, translation.y, 0.0),
 		)
 	}
 }
 
+// TODO: Unify this with `Tile`?
+#[derive(Clone)]
 pub struct Chart {
-	tile: tile::Tile<ChartData>,
+	tile: tile::Tile,
 }
 
 impl Chart {
-	fn new(tile: tile::Tile<ChartData>) -> Self {
+	fn new(tile: tile::Tile) -> Self {
 		Self { tile }
 	}
 
-	pub fn tile(&self) -> &tile::Tile<ChartData> {
+	pub fn tile(&self) -> &tile::Tile {
 		&self.tile
 	}
 }
 
 #[derive(Clone)]
 pub struct Atlas {
-	tile_pool: tile::Pool<ChartData>,
+	tile_pool: tile::Pool,
 	charts: HashMap<ChartKey, Arc<Chart>>,
-	usage_bind_group: Arc<BindGroup0>,
+	// usage_bind_group: Arc<BindGroup0>,
 }
 
 impl Atlas {
-	pub fn new(context: Arc<WgpuContext>) -> Self {
-		let device = context.device();
-		let chart_sampler = &device.create_sampler(&wgpu::SamplerDescriptor {
-			address_mode_u: wgpu::AddressMode::ClampToEdge,
-			address_mode_v: wgpu::AddressMode::ClampToEdge,
-			address_mode_w: wgpu::AddressMode::ClampToEdge,
-			mag_filter: wgpu::FilterMode::Nearest,
-			min_filter: wgpu::FilterMode::Nearest,
-			mipmap_filter: wgpu::FilterMode::Nearest,
-			..Default::default()
-		});
-		let usage_bind_group =
-			BindGroup0::from_bindings(device, BindGroupLayout0 { chart_sampler }).into();
+	pub fn new(context: Arc<WgpuContext>, format: wgpu::TextureFormat) -> Self {
+		// let device = context.device();
+		// let chart_sampler = &device.create_sampler(&wgpu::SamplerDescriptor {
+		// 	address_mode_u: wgpu::AddressMode::ClampToEdge,
+		// 	address_mode_v: wgpu::AddressMode::ClampToEdge,
+		// 	address_mode_w: wgpu::AddressMode::ClampToEdge,
+		// 	mag_filter: wgpu::FilterMode::Nearest,
+		// 	min_filter: wgpu::FilterMode::Nearest,
+		// 	mipmap_filter: wgpu::FilterMode::Nearest,
+		// 	..Default::default()
+		// });
+		// let usage_bind_group =
+		// 	BindGroup0::from_bindings(device, BindGroupLayout0 { chart_sampler }).into();
 
 		Atlas {
 			tile_pool: tile::Pool::new(
 				context,
 				TextureLayerDescriptor {
-					format: wgpu::TextureFormat::Rgba16Float,
+					size: Extent2d {
+						width: CHART_SIZE,
+						height: CHART_SIZE,
+					},
+					format,
 					..Default::default()
 				},
 			),
 			charts: HashMap::new(),
-			usage_bind_group,
+			// usage_bind_group,
 		}
 	}
 
-	pub fn charts(&self) -> impl Iterator<Item=Arc<Chart>> + '_ {
+	pub fn buffer_layout(&self) -> wgpu::VertexBufferLayout<'static> {
+		self.tile_pool.buffer_layout()
+	}
+
+	pub fn charts(&self) -> impl Iterator<Item = Arc<Chart>> + '_ {
 		self.charts.values().cloned()
 	}
 
@@ -138,10 +160,21 @@ impl Atlas {
 	}
 
 	pub fn get_chart_mut(&mut self, key: ChartKey) -> &mut Chart {
-		let chart = self
-			.charts
-			.entry(key)
-			.or_insert_with(|| Chart { tile: self.tile_pool.allocate_tile().into() });
+		let chart = self.charts.entry(key).or_insert_with(|| {
+			let tile = self.tile_pool.allocate_tile();
+			let (chart_to_canvas_scale, chart_to_canvas_translation) =
+				key.chart_to_canvas_scale_and_translation();
+			let tile_data = TileData {
+				chart_to_canvas_scale,
+				chart_to_canvas_translation,
+			};
+			tile.set_data(&tile_data);
+
+			let zero = half::f16::from_f32(0f32);
+			tile.fill_texture(bytemuck::cast_slice(&[zero, zero, zero, zero]));
+			Chart::new(tile).into()
+		});
+		// TODO: When this clones, we need to put that back in the atlas.
 		Arc::make_mut(chart)
 	}
 }

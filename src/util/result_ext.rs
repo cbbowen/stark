@@ -31,6 +31,9 @@ impl<T> OptionExt<T> for Option<T> {
 	where
 		T: Default,
 	{
-		self.ok_or(OptionNoneError(error)).ok_or_log().unwrap_or_default()
+		self
+			.ok_or(OptionNoneError(error))
+			.ok_or_log()
+			.unwrap_or_default()
 	}
 }

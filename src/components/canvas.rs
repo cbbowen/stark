@@ -1,20 +1,22 @@
 use crate::components::*;
-use crate::engine::{Airbrush, AirbrushDrawable, InputPoint};
 use crate::render::{self, BindingBuffer};
 use crate::util::{color_from_css_string, create_local_derived};
 use crate::*;
+use engine::*;
 use glam::*;
 use leptos::prelude::*;
 use leptos_use::{use_element_size, UseElementSizeReturn};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use util::CoordinateSource;
 use util::LocalCallback;
 use util::PointerCapture;
 use util::SetExt;
+use wgpu::VertexBufferLayout;
 
-fn canvas_render_pipeline(
+fn canvas_render_pipeline<'a>(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
+	buffer_layouts: &[VertexBufferLayout<'a>],
 	shader: &render::Shader,
 ) -> wgpu::RenderPipeline {
 	use shaders::canvas::*;
@@ -26,7 +28,7 @@ fn canvas_render_pipeline(
 			module,
 			entry_point: ENTRY_VS_MAIN,
 			compilation_options: Default::default(),
-			buffers: &[],
+			buffers: buffer_layouts,
 		})
 		.fragment(fragment_state(
 			module,
@@ -37,27 +39,6 @@ fn canvas_render_pipeline(
 			})]),
 		))
 		.create(device)
-}
-
-fn create_canvas_texture_view(
-	device: &wgpu::Device,
-	texture_format: wgpu::TextureFormat,
-) -> wgpu::TextureView {
-	let texture = device.create_texture(&wgpu::TextureDescriptor {
-		size: wgpu::Extent3d {
-			width: 4096,
-			height: 4096,
-			depth_or_array_layers: 1,
-		},
-		mip_level_count: 1,
-		sample_count: 1,
-		dimension: wgpu::TextureDimension::D2,
-		format: texture_format,
-		usage: wgpu::TextureUsages::all(),
-		label: Some("canvas_texture"),
-		view_formats: &[texture_format],
-	});
-	texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
 fn create_canvas_sampler(device: &wgpu::Device) -> wgpu::Sampler {
@@ -72,21 +53,14 @@ fn create_canvas_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 	})
 }
 
-fn create_canvas_bind_groups(
+fn create_canvas_bind_group(
 	device: &wgpu::Device,
-	texture_view: &wgpu::TextureView,
 	sampler: &wgpu::Sampler,
 ) -> (
 	shaders::canvas::bind_groups::BindGroup0,
-	shaders::canvas::bind_groups::BindGroup1,
 	BindingBuffer<Mat4>,
 ) {
 	use shaders::canvas::bind_groups::*;
-
-	let chart_to_canvas_buffer = BindingBuffer::init(&Mat4::IDENTITY)
-		.label("chart_to_canvas")
-		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
-		.create(device);
 
 	let canvas_to_view_buffer = BindingBuffer::init(&Mat4::ZERO)
 		.label("canvas_to_view")
@@ -97,14 +71,7 @@ fn create_canvas_bind_groups(
 		BindGroup0::from_bindings(
 			device,
 			BindGroupLayout0 {
-				chart_to_canvas: chart_to_canvas_buffer.as_entire_buffer_binding(),
-				chart_texture: texture_view,
 				chart_sampler: sampler,
-			},
-		),
-		BindGroup1::from_bindings(
-			device,
-			BindGroupLayout1 {
 				canvas_to_view: canvas_to_view_buffer.as_entire_buffer_binding(),
 			},
 		),
@@ -125,31 +92,40 @@ pub fn Canvas(
 	let node_ref = NodeRef::new();
 	let UseElementSizeReturn { width, height } = use_element_size(node_ref);
 
-	let canvas_sampler = create_canvas_sampler(context.device());
-
 	let canvas_texture_format = wgpu::TextureFormat::Rgba16Float;
+	let mut atlas = Atlas::new(context.clone(), canvas_texture_format);
+	for x in 0i32..4i32 {
+		for y in 0i32..4i32 {
+			atlas.get_chart_mut(ChartKey(x, y));
+		}
+	}
+
+	let atlas_buffer_layout = atlas.buffer_layout();
+	let atlas = Arc::new(RwLock::new(atlas));
+
+	let canvas_sampler = create_canvas_sampler(context.device());
+	let (canvas_bind_group, canvas_to_view_buffer) =
+		create_canvas_bind_group(context.device(), &canvas_sampler);
+
 	let (surface_texture_format, set_surface_texture_format) = signal_local(None);
-
-	let canvas_texture_view = create_canvas_texture_view(context.device(), canvas_texture_format);
-	let (canvas_bind_group0, canvas_bind_group1, canvas_to_view_buffer) =
-		create_canvas_bind_groups(context.device(), &canvas_texture_view, &canvas_sampler);
-
 	let render_pipeline = {
 		let context = context.clone();
 		let resources = resources.clone();
+		let vertex_buffer_layouts = [atlas_buffer_layout];
 		create_local_derived(move || {
 			Some(Arc::new(canvas_render_pipeline(
 				context.device(),
 				surface_texture_format.get()?,
+				&vertex_buffer_layouts,
 				&resources.canvas,
 			)))
 		})
 	};
 
 	let canvas_to_screen = RwSignal::new(Mat4::from_scale_rotation_translation(
-		Vec3::new(4096.0, 4096.0, 1.0),
+		Vec3::new(1.0, 1.0, 1.0),
 		Quat::IDENTITY,
-		Vec3::new(-2048.0, -2048.0, 0.0),
+		Vec3::new(-0.0, -0.0, 0.0),
 	));
 
 	// This is the mapping from normalized device coordinates to framebuffer coordinates.
@@ -172,15 +148,15 @@ pub fn Canvas(
 
 	let render = {
 		let context = context.clone();
-		let canvas_bind_group0 = Arc::new(canvas_bind_group0);
-		let canvas_bind_group1 = Arc::new(canvas_bind_group1);
+		let atlas = atlas.clone();
+		let canvas_bind_group = Arc::new(canvas_bind_group);
 		let canvas_to_view_buffer = Arc::new(canvas_to_view_buffer);
 		let redraw_trigger = redraw_trigger.clone();
 		create_local_derived(move || {
 			let context = context.clone();
 			redraw_trigger.track();
-			let canvas_bind_group0 = canvas_bind_group0.clone();
-			let canvas_bind_group1 = canvas_bind_group1.clone();
+			let atlas = atlas.clone();
+			let canvas_bind_group = canvas_bind_group.clone();
 			let canvas_to_view_buffer = canvas_to_view_buffer.clone();
 			let render_pipeline = render_pipeline.get();
 			let canvas_to_view = canvas_to_view.get();
@@ -222,9 +198,13 @@ pub fn Canvas(
 						..Default::default()
 					});
 					render_pass.set_pipeline(&render_pipeline);
-					canvas_bind_group0.set(&mut render_pass);
-					canvas_bind_group1.set(&mut render_pass);
-					render_pass.draw(0..4, 0..1);
+					canvas_bind_group.set(&mut render_pass);
+
+					let atlas = atlas.read().unwrap();
+					// TODO: Only render the visible tiles.
+					let charts: Vec<_> = atlas.charts().collect();
+					let tiles: Vec<_> = charts.iter().map(|c| c.tile()).collect();
+					draw_tiles(&mut render_pass, 0..4, &tiles);
 				}
 				context.queue().submit([encoder.finish()]);
 			};
@@ -242,8 +222,10 @@ pub fn Canvas(
 
 	let draw = {
 		let context = context.clone();
-		let canvas_texture_view = Arc::new(canvas_texture_view);
+		let atlas = atlas.clone();
 		move |drawable: AirbrushDrawable| {
+			let atlas = atlas.write().unwrap();
+
 			let mut encoder =
 				context
 					.device()
@@ -251,23 +233,30 @@ pub fn Canvas(
 						label: Some("Drawing Encoder"),
 					});
 
-			{
-				let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-					label: Some("Drawing Pass"),
-					color_attachments: &[
-						// This is what @location(0) in the fragment shader targets
-						Some(wgpu::RenderPassColorAttachment {
-							view: &canvas_texture_view,
-							resolve_target: None,
-							ops: wgpu::Operations {
-								load: wgpu::LoadOp::Load,
-								store: wgpu::StoreOp::Store,
-							},
-						}),
-					],
-					..Default::default()
-				});
-				drawable.draw(&mut render_pass);
+			// TODO: Find the minimal set of tiles to write to.
+			for chart in atlas.charts() {
+				let view = chart.tile().texture_view();
+				let chart_bind_group = chart.tile().write_bind_group();
+
+				{
+					let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+						label: Some("Drawing Pass"),
+						color_attachments: &[
+							// This is what @location(0) in the fragment shader targets
+							Some(wgpu::RenderPassColorAttachment {
+								view: &view,
+								resolve_target: None,
+								ops: wgpu::Operations {
+									load: wgpu::LoadOp::Load,
+									store: wgpu::StoreOp::Store,
+								},
+							}),
+						],
+						..Default::default()
+					});
+					chart_bind_group.set(&mut render_pass);
+					drawable.draw(&mut render_pass);
+				}
 			}
 			context.queue().submit(std::iter::once(encoder.finish()));
 			redraw_trigger.notify();
@@ -376,8 +365,23 @@ pub fn Canvas(
 	};
 	let configured = LocalCallback::new(configured);
 
+	// let on_fetch_tile_texture_url = Trigger::new();
+	// let texture_url = LocalResource::new(move || {
+	// 	on_fetch_tile_texture_url.track();
+	// 	let atlas = atlas.clone();
+	// 	async move {
+	// 		let chart = atlas.read().unwrap().get_chart(&ChartKey::find_containing(glam::Vec2::ZERO))?;
+	// 		Some(chart.tile().encode_texture_as_url().await.unwrap())
+	// 	}
+	// });
+
 	view! {
 		<div class="Canvas" node_ref=node_ref>
+			// <div class="debug">
+			// 	<button on:click=move |_| { on_fetch_tile_texture_url.notify() }>"Fetch tile texture"</button>
+			// 	// <a href=move || { texture_url.get().map(|s| s.take()).unwrap_or_default() } target="_blank">"Download texture"</a>
+			// 	<img src=move || { texture_url.get().map(|s| s.take()).unwrap_or_default() } />
+			// </div>
 			<RenderSurface
 				render=render
 				configured=configured

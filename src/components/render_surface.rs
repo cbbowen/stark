@@ -4,9 +4,9 @@ use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys;
 use leptos_use::use_debounce_fn;
+use std::fmt::Debug;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::fmt::Debug;
 use tracing::{error, trace, warn};
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -121,7 +121,7 @@ pub fn RenderSurface(
 
 	let size = RwSignal::new_local(None);
 	let write_resize = move |width, height| {
-		// TODO: Figure out why we're getting bogus size updates here.
+		// TODO: Figure out why we're getting bogus size updates here after updating Leptos.
 		if width == 0 || height == 0 {
 			warn!(width, height, "RenderSurface::write_resize failed");
 			return;

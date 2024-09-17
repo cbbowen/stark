@@ -1,5 +1,5 @@
 use leptos::prelude::*;
-use thaw::{Card, CardHeader, CardPreview, Body1};
+use thaw::{Body1, Card, CardHeader, CardPreview};
 
 #[component]
 pub fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
@@ -14,5 +14,5 @@ pub fn Panel(#[prop(into)] title: String, children: Children) -> impl IntoView {
 				{children()}
 			</CardPreview>
 		</Card>
-	}	
+	}
 }

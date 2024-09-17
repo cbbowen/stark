@@ -39,13 +39,6 @@ impl Default for GoldenOptions {
 }
 
 impl WgpuTestContext {
-	pub fn barrier(&self) {
-		self
-			.device()
-			.poll(wgpu::Maintain::wait())
-			.panic_on_timeout()
-	}
-
 	pub fn new() -> Result<Self, WgpuContextError> {
 		let context = pollster::block_on(WgpuContext::new())?;
 		let device = context.device();
@@ -156,58 +149,6 @@ impl WgpuTestContext {
 		self.queue().submit([command_encoder.finish()]);
 	}
 
-	fn get_buffer_data(&self, buffer: &wgpu::Buffer) -> Vec<u8> {
-		let slice = buffer.slice(..);
-		slice.map_async(wgpu::MapMode::Read, |_| ());
-		self.barrier();
-		slice.get_mapped_range().to_vec()
-	}
-
-	fn get_texture_data(&self, texture: &wgpu::Texture) -> Vec<u8> {
-		let aspect = wgpu::TextureAspect::All;
-		let (block_width, block_height) = texture.format().block_dimensions();
-		let bytes_per_row =
-			texture.format().block_copy_size(Some(aspect)).unwrap() * (texture.width() / block_width);
-		let rows_per_image = texture.height() / block_height;
-		let row_stride = wgpu::util::align_to(bytes_per_row, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
-
-		let device = self.device();
-		let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-			label: None,
-			size: (row_stride * texture.height()) as wgpu::BufferAddress,
-			usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-			mapped_at_creation: false,
-		});
-		let mut encoder = device.create_command_encoder(&Default::default());
-		let mip_level = 0;
-		encoder.copy_texture_to_buffer(
-			wgpu::ImageCopyTexture {
-				texture,
-				mip_level,
-				origin: wgpu::Origin3d::ZERO,
-				aspect,
-			},
-			wgpu::ImageCopyBuffer {
-				buffer: &buffer,
-				layout: wgpu::ImageDataLayout {
-					offset: 0,
-					bytes_per_row: Some(row_stride),
-					rows_per_image: Some(rows_per_image),
-				},
-			},
-			texture
-				.size()
-				.mip_level_size(mip_level, texture.dimension()),
-		);
-		self.queue().submit([encoder.finish()]);
-		self
-			.get_buffer_data(&buffer)
-			.chunks_exact(row_stride as usize)
-			.flat_map(|row| &row[..bytes_per_row as usize])
-			.copied()
-			.collect()
-	}
-
 	pub fn render_golden_commands(
 		&self,
 		name: &str,
@@ -260,7 +201,7 @@ impl WgpuTestContext {
 		options: GoldenOptions,
 		texture: &wgpu::Texture,
 	) -> anyhow::Result<()> {
-		let data = self.get_texture_data(texture);
+		let data = pollster::block_on(self.get_texture_layer_data(texture, 0))?;
 		let width = texture.width();
 		let height = texture.height();
 
@@ -273,14 +214,7 @@ impl WgpuTestContext {
 
 		if let Ok(file) = std::fs::File::create_new(path.as_path()) {
 			let file = std::io::BufWriter::new(file);
-			let mut encoder = png::Encoder::new(file, width, height);
-			encoder.set_color(png::ColorType::Rgba);
-			encoder.set_depth(png::BitDepth::Eight);
-			encoder.set_srgb(png::SrgbRenderingIntent::AbsoluteColorimetric);
-			encoder.set_compression(png::Compression::Best);
-			let mut writer = encoder.write_header().unwrap();
-			writer.write_image_data(&data)?;
-			Ok(())
+			debug::encode_png(&data, width, height, texture.format(), file)
 		} else {
 			let golden_decoder = png::Decoder::new(std::fs::File::open(path)?);
 			let mut golden_reader = golden_decoder.read_info()?;
