@@ -80,10 +80,22 @@ impl ChartKey {
 	}
 }
 
-type Chart = tile::Tile<ChartData>;
+pub struct Chart {
+	tile: tile::Tile<ChartData>,
+}
+
+impl Chart {
+	fn new(tile: tile::Tile<ChartData>) -> Self {
+		Self { tile }
+	}
+
+	pub fn tile(&self) -> &tile::Tile<ChartData> {
+		&self.tile
+	}
+}
 
 #[derive(Clone)]
-struct Atlas {
+pub struct Atlas {
 	tile_pool: tile::Pool<ChartData>,
 	charts: HashMap<ChartKey, Arc<Chart>>,
 	usage_bind_group: Arc<BindGroup0>,
@@ -117,6 +129,10 @@ impl Atlas {
 		}
 	}
 
+	pub fn charts(&self) -> impl Iterator<Item=Arc<Chart>> + '_ {
+		self.charts.values().cloned()
+	}
+
 	pub fn get_chart(&self, key: &ChartKey) -> Option<Arc<Chart>> {
 		self.charts.get(key).cloned()
 	}
@@ -125,7 +141,7 @@ impl Atlas {
 		let chart = self
 			.charts
 			.entry(key)
-			.or_insert_with(|| self.tile_pool.allocate_tile().into());
+			.or_insert_with(|| Chart { tile: self.tile_pool.allocate_tile().into() });
 		Arc::make_mut(chart)
 	}
 }

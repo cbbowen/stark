@@ -1,5 +1,6 @@
 use crate::render::BindingBuffer;
 use crate::{shaders::chart::*, util::QueueExt, WgpuContext};
+use bon::{bon, builder};
 use encase::{internal::WriteInto, CalculateSizeFor, ShaderType};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -254,6 +255,34 @@ pub struct Tile<Data> {
 	_data: PhantomData<Data>,
 }
 
+#[bon]
+impl<Data: 'static> Tile<Data> {
+	fn get_block(&self) -> &Block {
+		self.pool.get_block(self.index.block_index)
+	}
+
+	#[builder]
+	pub fn create_view(
+		&self,
+		label: Option<&str>,
+		format: Option<wgpu::TextureFormat>,
+		#[builder(default)] base_mip_level: u32,
+		mip_level_count: Option<u32>,
+	) -> wgpu::TextureView {
+		let block = self.get_block();
+		block.texture.create_view(&wgpu::TextureViewDescriptor {
+			label,
+			format,
+			dimension: Some(wgpu::TextureViewDimension::D2),
+			aspect: wgpu::TextureAspect::All,
+			base_mip_level,
+			mip_level_count,
+			base_array_layer: self.index.layer_index,
+			array_layer_count: Some(1),
+		})
+	}
+}
+
 impl<Data: ShaderType + WriteInto + 'static> Tile<Data>
 where
 	[Data]: CalculateSizeFor,
@@ -269,10 +298,6 @@ where
 		}
 	}
 
-	fn get_block(&self) -> &Block {
-		self.pool.get_block(self.index.block_index)
-	}
-
 	fn get_copy_texture(&self) -> wgpu::ImageCopyTexture<'_> {
 		wgpu::ImageCopyTexture {
 			texture: &self.get_block().texture,
@@ -285,14 +310,25 @@ where
 		}
 	}
 
+	fn context(&self) -> &Arc<WgpuContext> {
+		&self.pool.context
+	}
+
+	fn device(&self) -> &wgpu::Device {
+		&self.context().device()
+	}
+
+	fn queue(&self) -> &wgpu::Queue {
+		&self.context().queue()
+	}
+
 	pub fn set_data(&self, data: &Data) {
 		let mut contents = encase::UniformBuffer::new(Vec::<u8>::new());
 		contents.write(&data).unwrap();
 
-		let context = &self.pool.context;
 		let offset = self.get_buffer_offset();
 
-		context.queue().write_buffer(
+		self.queue().write_buffer(
 			&self.get_block().data_buffer,
 			offset,
 			&contents.into_inner(),
@@ -300,8 +336,7 @@ where
 	}
 
 	pub fn fill_texture(&self, pixel_data: &[u8]) {
-		let pool = &self.pool;
-		pool.context.queue().fill_texture_layer(
+		self.queue().fill_texture_layer(
 			&self.get_block().texture,
 			pixel_data,
 			self.index.layer_index,
@@ -363,7 +398,6 @@ fn draw_tile_internal<Data>(
 	tile_indices: impl IntoIterator<Item = Index>,
 ) {
 	use itertools::Itertools;
-	
 
 	for (block_index, block_tile_indices) in tile_indices
 		.into_iter()
