@@ -1,6 +1,6 @@
 use crate::components::*;
 use crate::render::{self, BindingBuffer};
-use crate::util::{color_from_css_string, create_local_derived};
+use crate::util::create_local_derived;
 use crate::*;
 use engine::*;
 use glam::*;
@@ -134,21 +134,14 @@ pub fn Canvas(
 		create_local_derived(move || {
 			let size = surface_texture_size.get()?;
 			Some(Arc::new(
-				device
-					.create_texture(&wgpu::TextureDescriptor {
-						label: Some("Canvas::surface_texture"),
-						size: wgpu::Extent3d {
-							width: size.0,
-							height: size.1,
-							depth_or_array_layers: 1,
-						},
-						mip_level_count: 1,
-						sample_count: MULTISAMPLE_COUNT,
-						dimension: wgpu::TextureDimension::D2,
-						format: surface_texture_format.get()?,
-						usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-						view_formats: &[],
-					})
+				render::texture()
+					.label("Canvas::surface_texture")
+					.width(size.0)
+					.height(size.1)
+					.sample_count(MULTISAMPLE_COUNT)
+					.format(surface_texture_format.get()?)
+					.usage(wgpu::TextureUsages::RENDER_ATTACHMENT)
+					.create(&device)
 					.create_view(&wgpu::TextureViewDescriptor::default()),
 			))
 		})

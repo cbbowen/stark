@@ -1,4 +1,3 @@
-use wgpu::util::DeviceExt;
 
 use crate::*;
 use std::io::Read;
@@ -62,25 +61,14 @@ impl WgpuTestContext {
 		let buffer = image::load_from_memory(&buffer)?.to_rgba8();
 
 		let format = wgpu::TextureFormat::Rgba8UnormSrgb;
-		Ok(self.device().create_texture_with_data(
-			self.queue(),
-			&wgpu::TextureDescriptor {
-				label: None,
-				size: wgpu::Extent3d {
-					width: buffer.width(),
-					height: buffer.height(),
-					depth_or_array_layers: 1,
-				},
-				mip_level_count: 1,
-				sample_count: 1,
-				dimension: wgpu::TextureDimension::D2,
-				format,
-				usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::TEXTURE_BINDING,
-				view_formats: &[format.remove_srgb_suffix()],
-			},
-			wgpu::util::TextureDataOrder::default(),
-			&buffer,
-		))
+		Ok(render::texture()
+			.width(buffer.width())
+			.height(buffer.height())
+			.format(format)
+			.usage(wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::TEXTURE_BINDING)
+			.view_formats(&[format.remove_srgb_suffix()])
+			.with_data((self.queue(), &buffer))
+			.create(self.device()))
 	}
 
 	pub fn copy_texture_to_scaled_texture(
@@ -173,20 +161,14 @@ impl WgpuTestContext {
 		let width = options.width;
 		let height = options.height;
 		let device = self.device();
-		let texture = device.create_texture(&wgpu::TextureDescriptor {
-			size: wgpu::Extent3d {
-				width,
-				height,
-				depth_or_array_layers: 1,
-			},
-			mip_level_count: 1,
-			sample_count: 1,
-			dimension: wgpu::TextureDimension::D2,
-			format,
-			usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-			label: Some("drawing_texture"),
-			view_formats: &[view_format],
-		});
+		let texture = render::texture()
+			.label("drawing_texture")
+			.width(width)
+			.height(height)
+			.format(format)
+			.usage(wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC)
+			.view_formats(&[view_format])
+			.create(device);
 		let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
 			format: Some(view_format),
 			..Default::default()
