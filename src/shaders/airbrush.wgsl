@@ -23,9 +23,11 @@ struct VertexInput {
 
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,
-	@location(0) u_bounds: vec2<f32>,
-	@location(1) vw: vec2<f32>,
-	@location(2) rate: f32,
+	@location(0) @interpolate(linear) u_bounds: vec2<f32>,
+	@location(1) @interpolate(linear) vw: vec2<f32>,
+	@location(2) @interpolate(linear) rate: f32,
+	
+	// @location(3) @interpolate(flat) theta: f32,
 };
 
 @vertex
@@ -40,21 +42,23 @@ fn vs_main(
     out.u_bounds = in.u_bounds;
     out.vw = vec2(f32(in.vertex_index & 1), in.opacity);
 	 out.rate = in.rate;
+	 // out.theta = f32(in.vertex_index);
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	 // Useful for debugging toplogy.
-	 //  let theta = 6.28 * 0.5 * (in.u_bounds.y + in.u_bounds.x);
-	 //  return vec4(0.75, in.vw.y * 0.5 * vec2(sin(theta), cos(theta)), in.u_bounds.y - in.u_bounds.x);
+	 // let theta = 6.28 * 0.5 * (in.u_bounds.y + in.u_bounds.x);
+	 // let theta = in.theta;
+	 // return vec4(0.75, in.vw.y * 0.5 * vec2(sin(theta), cos(theta)), in.u_bounds.y - in.u_bounds.x);
 
     let shape_transmission = in.rate * (textureSample(shape_texture, shape_sampler, vec3(in.u_bounds.y, in.vw)).x -
 	                                     textureSample(shape_texture, shape_sampler, vec3(in.u_bounds.x, in.vw)).x);
 
-    let alpha = -expm1(shape_transmission) * (1 + 0.125 * dither1(in.position.xy + action.seed));
+    let alpha = -expm1(shape_transmission) * (1 + dither1(in.position.xy + action.seed) / 256.0);
 
-    let color = action.color + dither3(in.position.xy + action.seed) / 128;
+    let color = action.color + dither3(in.position.xy + action.seed) / 256;
     return vec4(color, clamp(alpha, 0.0, 1.0));
 }
 

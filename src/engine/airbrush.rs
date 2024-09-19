@@ -235,7 +235,7 @@ impl Airbrush {
 		};
 		self.action_buffer.write(queue, action);
 
-		let shift_fraction = ((s0 - s1) * s0 / length).clamp(-1.0, 1.0);
+		let shift_fraction = ((s0 - s1) / length).clamp(-1.0, 1.0);
 		let blend = if length > s0 + s1 {
 			PiecewiseLinear::new([
 				(-s0, 0.0),
@@ -276,7 +276,7 @@ impl Airbrush {
 				(distance, blend, u_bounds)
 			});
 
-		let mut vertices = Vec::with_capacity(12);
+		let mut vertices = Vec::with_capacity(2 * events.len());
 		for (distance, blend, u_bounds) in events {
 			let p = p0 + distance * tangent;
 			let width = s0 + blend * (s1 - s0);
@@ -391,7 +391,7 @@ mod tests {
 		airbrush.start();
 
 		let input_point = InputPoint {
-			position: vec2(0.3, 0.3),
+			position: vec2(0.3, 0.2),
 			pressure: 0.5f32,
 			color: Vec3::ONE,
 			size: 0.3f32,
@@ -401,7 +401,7 @@ mod tests {
 		assert!(airbrush.drag(queue, input_point.clone()).is_none());
 
 		let input_point = InputPoint {
-			position: vec2(0.9, 0.9),
+			position: vec2(0.8, 0.9),
 			size: 0.1f32,
 			..input_point
 		};
