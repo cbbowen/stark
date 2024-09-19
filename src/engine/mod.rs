@@ -9,3 +9,5 @@ pub use tile::*;
 
 mod airbrush;
 pub use airbrush::*;
+
+pub mod raster;

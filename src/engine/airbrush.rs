@@ -318,17 +318,14 @@ fn get_triangle_strip_chart_keys(
 ) -> impl Iterator<Item = atlas::ChartKey> {
 	let triangles = vertices.into_iter().tuple_windows();
 	triangles
-		.flat_map(|(a, b, c)| {
-			// TODO: Implement this.
-			[]
-		})
+		.flat_map(|(a, b, c)| atlas::ChartKey::find_covering(a, b, c))
 		.collect::<std::collections::HashSet<_>>()
 		.into_iter()
 }
 
 impl<'tool> AirbrushDrawable<'tool> {
-	pub fn get_chart_keys(&self) -> impl IntoIterator<Item = &atlas::ChartKey> {
-		self.chart_keys.iter()
+	pub fn get_chart_keys(&self) -> impl Iterator<Item = atlas::ChartKey> + '_ {
+		self.chart_keys.iter().cloned()
 	}
 
 	pub fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {

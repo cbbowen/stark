@@ -72,6 +72,15 @@ impl ChartKey {
 			.map(|(x, y)| ChartKey(x, y))
 	}
 
+	pub fn find_covering(a: Vec2, b: Vec2, c: Vec2) -> impl Iterator<Item = ChartKey> {
+		crate::engine::raster::conservative_triangle(
+			a / CHART_SCALE,
+			b / CHART_SCALE,
+			c / CHART_SCALE,
+		)
+		.map(|(x, y)| ChartKey(x, y))
+	}
+
 	pub fn chart_to_canvas_scale_and_translation(&self) -> (Vec2, Vec2) {
 		let scale = vec2(CHART_SCALE, CHART_SCALE);
 		(scale, scale * vec2(self.0 as f32, self.1 as f32))

@@ -34,6 +34,7 @@ fn canvas_render_pipeline<'a>(
 			module,
 			&fs_main_entry([Some(wgpu::ColorTargetState {
 				format: texture_format,
+				// TODO: We will probably need to change this to support layers.
 				blend: Some(wgpu::BlendState::REPLACE),
 				write_mask: wgpu::ColorWrites::ALL,
 			})]),
@@ -46,7 +47,7 @@ fn create_canvas_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 		address_mode_u: wgpu::AddressMode::ClampToEdge,
 		address_mode_v: wgpu::AddressMode::ClampToEdge,
 		address_mode_w: wgpu::AddressMode::ClampToEdge,
-		mag_filter: wgpu::FilterMode::Linear,
+		mag_filter: wgpu::FilterMode::Nearest,
 		min_filter: wgpu::FilterMode::Linear,
 		mipmap_filter: wgpu::FilterMode::Linear,
 		..Default::default()
@@ -93,12 +94,7 @@ pub fn Canvas(
 	let UseElementSizeReturn { width, height } = use_element_size(node_ref);
 
 	let canvas_texture_format = wgpu::TextureFormat::Rgba16Float;
-	let mut atlas = Atlas::new(context.clone(), canvas_texture_format);
-	for x in 0i32..4i32 {
-		for y in 0i32..4i32 {
-			atlas.get_chart_mut(ChartKey(x, y));
-		}
-	}
+	let atlas = Atlas::new(context.clone(), canvas_texture_format);
 
 	let atlas_buffer_layout = atlas.buffer_layout();
 	let atlas = Arc::new(RwLock::new(atlas));
@@ -185,12 +181,7 @@ pub fn Canvas(
 								view: &view,
 								resolve_target: None,
 								ops: wgpu::Operations {
-									load: wgpu::LoadOp::Clear(wgpu::Color {
-										r: background_color.x as f64,
-										g: background_color.y as f64,
-										b: background_color.z as f64,
-										a: background_color.w as f64,
-									}),
+									load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
 									store: wgpu::StoreOp::Store,
 								},
 							}),
@@ -224,7 +215,7 @@ pub fn Canvas(
 		let context = context.clone();
 		let atlas = atlas.clone();
 		move |drawable: AirbrushDrawable| {
-			let atlas = atlas.write().unwrap();
+			let mut atlas = atlas.write().unwrap();
 
 			let mut encoder =
 				context
@@ -233,8 +224,9 @@ pub fn Canvas(
 						label: Some("Drawing Encoder"),
 					});
 
-			// TODO: Find the minimal set of tiles to write to.
-			for chart in atlas.charts() {
+			// Find the minimal set of tiles to write to.
+			for chart_key in drawable.get_chart_keys() {
+				let chart = atlas.get_chart_mut(chart_key);
 				let view = chart.tile().texture_view();
 				let chart_bind_group = chart.tile().write_bind_group();
 
