@@ -13,6 +13,8 @@ use util::PointerCapture;
 use util::SetExt;
 use wgpu::VertexBufferLayout;
 
+const MULTISAMPLE_COUNT: u32 = 4;
+
 fn canvas_render_pipeline<'a>(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
@@ -39,6 +41,10 @@ fn canvas_render_pipeline<'a>(
 				write_mask: wgpu::ColorWrites::ALL,
 			})]),
 		))
+		.multisample(wgpu::MultisampleState {
+			count: MULTISAMPLE_COUNT,
+			..Default::default()
+		})
 		.create(device)
 }
 
@@ -103,18 +109,48 @@ pub fn Canvas(
 	let (canvas_bind_group, canvas_to_view_buffer) =
 		create_canvas_bind_group(context.device(), &canvas_sampler);
 
-	let (surface_texture_format, set_surface_texture_format) = signal_local(None);
+	let (surface_configuration, set_surface_configuration) =
+		signal_local::<Option<wgpu::SurfaceConfiguration>>(None);
+	let surface_texture_format = Memo::new(move |_| surface_configuration.get().map(|c| c.format));
+	let surface_texture_size =
+		Memo::new(move |_| surface_configuration.get().map(|c| (c.width, c.height)));
+
 	let render_pipeline = {
-		let context = context.clone();
+		let device = context.device().clone();
 		let resources = resources.clone();
 		let vertex_buffer_layouts = [atlas_buffer_layout];
 		create_local_derived(move || {
 			Some(Arc::new(canvas_render_pipeline(
-				context.device(),
+				&device,
 				surface_texture_format.get()?,
 				&vertex_buffer_layouts,
 				&resources.canvas,
 			)))
+		})
+	};
+
+	let surface_texture_view = {
+		let device = context.device().clone();
+		create_local_derived(move || {
+			let size = surface_texture_size.get()?;
+			Some(Arc::new(
+				device
+					.create_texture(&wgpu::TextureDescriptor {
+						label: Some("Canvas::surface_texture"),
+						size: wgpu::Extent3d {
+							width: size.0,
+							height: size.1,
+							depth_or_array_layers: 1,
+						},
+						mip_level_count: 1,
+						sample_count: MULTISAMPLE_COUNT,
+						dimension: wgpu::TextureDimension::D2,
+						format: surface_texture_format.get()?,
+						usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+						view_formats: &[],
+					})
+					.create_view(&wgpu::TextureViewDescriptor::default()),
+			))
 		})
 	};
 
@@ -156,10 +192,14 @@ pub fn Canvas(
 			let canvas_to_view_buffer = canvas_to_view_buffer.clone();
 			let render_pipeline = render_pipeline.get();
 			let canvas_to_view = canvas_to_view.get();
-			let background_color = thaw::Theme::use_rw_theme()
-				.with(|theme| color_from_css_string(&theme.color.color_neutral_background_static));
+			// let background_color = thaw::Theme::use_rw_theme()
+			// 	.with(|theme| color_from_css_string(&theme.color.color_neutral_background_static));
+			let surface_texture_view = surface_texture_view.get();
 			let callback = move |view: wgpu::TextureView| {
-				let Some(render_pipeline) = render_pipeline.clone() else {
+				let Some(render_pipeline) = &render_pipeline else {
+					return;
+				};
+				let Some(surface_texture_view) = &surface_texture_view else {
 					return;
 				};
 
@@ -178,8 +218,8 @@ pub fn Canvas(
 						color_attachments: &[
 							// This is what @location(0) in the fragment shader targets
 							Some(wgpu::RenderPassColorAttachment {
-								view: &view,
-								resolve_target: None,
+								view: &surface_texture_view,
+								resolve_target: Some(&view),
 								ops: wgpu::Operations {
 									load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
 									store: wgpu::StoreOp::Store,
@@ -353,7 +393,7 @@ pub fn Canvas(
 	};
 
 	let configured = move |configuration: wgpu::SurfaceConfiguration| {
-		set_surface_texture_format.try_set_or_log(Some(configuration.format));
+		set_surface_configuration.try_set_or_log(Some(configuration));
 	};
 	let configured = LocalCallback::new(configured);
 
@@ -370,9 +410,9 @@ pub fn Canvas(
 	view! {
 		<div class="Canvas" node_ref=node_ref>
 			// <div class="debug">
-			// 	<button on:click=move |_| { on_fetch_tile_texture_url.notify() }>"Fetch tile texture"</button>
-			// 	// <a href=move || { texture_url.get().map(|s| s.take()).unwrap_or_default() } target="_blank">"Download texture"</a>
-			// 	<img src=move || { texture_url.get().map(|s| s.take()).unwrap_or_default() } />
+			// <button on:click=move |_| { on_fetch_tile_texture_url.notify() }>"Fetch tile texture"</button>
+			// // <a href=move || { texture_url.get().map(|s| s.take()).unwrap_or_default() } target="_blank">"Download texture"</a>
+			// <img src=move || { texture_url.get().map(|s| s.take()).unwrap_or_default() } />
 			// </div>
 			<RenderSurface
 				render=render
