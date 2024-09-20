@@ -21,7 +21,7 @@ pub fn Home() -> impl IntoView {
 	let brush_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
 	let input_brush_size = RwSignal::new(4.0);
 	let brush_opacity = RwSignal::new(1.0);
-	let brush_rate = RwSignal::new(0.5);
+	let brush_rate = RwSignal::new(1.0);
 
 	let brush_size = create_derived(move || {
 		let input_brush_size = input_brush_size.get();
@@ -62,14 +62,14 @@ pub fn Home() -> impl IntoView {
 								<thaw::Slider
 									value=brush_opacity
 									min=0.0
-									max=1.0
+									max=2.0
 									step=0.05
 								></thaw::Slider>
 							</BrushSetting>
 							<BrushSetting name="Rate">
 								<thaw::Slider
 									value=brush_rate
-									min=0.05
+									min=0.0
 									max=2.0
 									step=0.05
 								></thaw::Slider>

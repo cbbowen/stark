@@ -67,12 +67,13 @@ fn create_bind_group(
 }
 
 pub fn preprocess_shape_row(
-	data: impl IntoIterator<Item = f32>,
+	data: impl ExactSizeIterator<Item = f32>,
 	opacity: f32,
 ) -> impl Iterator<Item = f32> {
 	let data = data.into_iter();
+	let scale = 1.0 / data.len() as f32;
 	data
-		.map(move |v| ((-opacity * v.max(0.0)).ln_1p()))
+		.map(move |v| scale * (-opacity * v.max(0.0)).ln_1p())
 		.scan(0.0, move |sum, value| {
 			let result = Some((*sum + 0.5 * value).min(0.0));
 			*sum += value;
@@ -80,16 +81,16 @@ pub fn preprocess_shape_row(
 		})
 }
 
-pub fn uniform_samples(size: u32) -> impl Iterator<Item = f32> {
+pub fn uniform_samples(size: u32) -> impl ExactSizeIterator<Item = f32> {
 	let scale = 1.0 / (size as f32 - 1.0);
 	(0..size).map(move |i| scale * i as f32)
 }
 
-pub fn centered_uniform_samples(size: u32) -> impl Iterator<Item = f32> {
+pub fn centered_uniform_samples(size: u32) -> impl ExactSizeIterator<Item = f32> {
 	uniform_samples(size).map(|x| 2.0 * x - 1.0)
 }
 
-pub fn generate_shape_row(y: f32, width: u32) -> impl Iterator<Item = f32> {
+pub fn generate_shape_row(y: f32, width: u32) -> impl ExactSizeIterator<Item = f32> {
 	const SHAPE: f32 = 1.0;
 	centered_uniform_samples(width).map(move |x| (1.0 - (x * x + y * y).powf(SHAPE)).max(0.0))
 }
