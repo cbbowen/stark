@@ -7,6 +7,9 @@ pub struct Resources {
 	pub canvas: Shader,
 	pub airbrush: Shader,
 	pub color_picker: Shader,
+	pub copy_transform: Shader,
+	pub log_transform: Shader,
+	pub horizontal_scan: Shader,
 }
 
 impl Resources {
@@ -25,6 +28,21 @@ impl Resources {
 			color_picker: Shader {
 				module: shaders::color_picker::create_shader_module(device),
 				layout: shaders::color_picker::create_pipeline_layout(device),
+			},
+
+			copy_transform: Shader {
+				module: shaders::copy_transform::create_shader_module(device),
+				layout: shaders::copy_transform::create_pipeline_layout(device),
+			},
+
+			horizontal_scan: Shader {
+				module: shaders::horizontal_scan::create_shader_module(device),
+				layout: shaders::horizontal_scan::create_pipeline_layout(device),
+			},
+
+			log_transform: Shader {
+				module: shaders::log_transform::create_shader_module(device),
+				layout: shaders::log_transform::create_pipeline_layout(device),
 			},
 		}
 	}

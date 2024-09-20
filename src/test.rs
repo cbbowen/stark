@@ -1,4 +1,6 @@
 
+use debug::SubpixelFormat;
+
 use crate::*;
 use std::io::Read;
 use std::ops::Deref;
@@ -7,7 +9,7 @@ use std::sync::Arc;
 pub struct WgpuTestContext {
 	context: Arc<WgpuContext>,
 
-	copy_scaled: render::Shader,
+	copy_transform: render::Shader,
 }
 
 impl Deref for WgpuTestContext {
@@ -42,16 +44,16 @@ impl WgpuTestContext {
 		let context = pollster::block_on(WgpuContext::new())?;
 		let device = context.device();
 
-		let copy_scaled = render::Shader {
-			module: shaders::copy_scaled::create_shader_module(device),
-			layout: shaders::copy_scaled::create_pipeline_layout(device),
+		let copy_transform = render::Shader {
+			module: shaders::copy_transform::create_shader_module(device),
+			layout: shaders::copy_transform::create_pipeline_layout(device),
 		}
 		.into();
 
 		let context = Arc::new(context);
 		Ok(Self {
 			context,
-			copy_scaled,
+			copy_transform,
 		})
 	}
 
@@ -90,10 +92,12 @@ impl WgpuTestContext {
 			..Default::default()
 		});
 
-		use shaders::copy_scaled::*;
-		let module = &self.copy_scaled.module;
+		let transform_buffer = render::BindingBuffer::init_sized(&glam::Mat2::IDENTITY).create(device);
+
+		use shaders::copy_transform::*;
+		let module = &self.copy_transform.module;
 		let pipeline = render::render_pipeline()
-			.layout(&self.copy_scaled.layout)
+			.layout(&self.copy_transform.layout)
 			.vertex(wgpu::VertexState {
 				module,
 				entry_point: ENTRY_VS_MAIN,
@@ -112,6 +116,7 @@ impl WgpuTestContext {
 		let bind_group = bind_groups::BindGroup0::from_bindings(
 			device,
 			bind_groups::BindGroupLayout0 {
+				transform: transform_buffer.as_entire_buffer_binding(),
 				source_texture: &source_view,
 				source_sampler: &sampler,
 			},
@@ -174,7 +179,7 @@ impl WgpuTestContext {
 			..Default::default()
 		});
 		action(texture_view);
-		self.golden_texture(name, options, &texture)
+		self.golden_texture(name, options, &texture, 0)
 	}
 
 	pub fn golden_texture(
@@ -182,8 +187,9 @@ impl WgpuTestContext {
 		name: &str,
 		options: GoldenOptions,
 		texture: &wgpu::Texture,
+		layer_index: u32
 	) -> anyhow::Result<()> {
-		let data = pollster::block_on(self.get_texture_layer_data(texture, 0))?;
+		let data = pollster::block_on(self.get_texture_layer_data(texture, layer_index))?;
 		let width = texture.width();
 		let height = texture.height();
 
@@ -194,9 +200,12 @@ impl WgpuTestContext {
 			std::fs::create_dir_all(parent)?;
 		}
 
+		let format = texture.format();
+		let subpixel_format = debug::SubpixelFormat::of_texture(format)?;
+		let subpixel_format = subpixel_format.preferred_image_format(format.components());
 		if let Ok(file) = std::fs::File::create_new(path.as_path()) {
 			let file = std::io::BufWriter::new(file);
-			debug::encode_png(&data, width, height, texture.format(), file)
+			debug::encode_png(&data, width, height, format, Some(subpixel_format), file)
 		} else {
 			let golden_decoder = png::Decoder::new(std::fs::File::open(path)?);
 			let mut golden_reader = golden_decoder.read_info()?;
@@ -204,8 +213,8 @@ impl WgpuTestContext {
 			let golden_info = golden_reader.next_frame(&mut golden_data)?;
 			assert_eq!(golden_info.width, width);
 			assert_eq!(golden_info.height, height);
-			assert_eq!(golden_info.color_type, png::ColorType::Rgba);
-			assert_eq!(golden_info.bit_depth, png::BitDepth::Eight);
+			assert_eq!(golden_info.color_type, debug::png_color_components(format.components()).unwrap());
+			assert_eq!(golden_info.bit_depth, subpixel_format.png_bit_depth().unwrap());
 			assert_eq!(golden_data.len(), data.len());
 
 			let mut differences = golden_data

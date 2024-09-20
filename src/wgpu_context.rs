@@ -46,14 +46,7 @@ impl WgpuContext {
 			.request_device(
 				&wgpu::DeviceDescriptor {
 					required_features: wgpu::Features::default()
-						| wgpu::Features::INDIRECT_FIRST_INSTANCE, /* This could be useful, but I think
-					                                             * we can get away with 16-bit floats
-					                                             * for now.
-					                                             * | FLOAT32_FILTERABLE
-					                                             * This would be convenient for brush
-					                                             * shapes, but it's currently
-					                                             * native-only.
-					                                             * | wgpu::Features::ADDRESS_MODE_CLAMP_TO_ZERO */
+						| wgpu::Features::INDIRECT_FIRST_INSTANCE,
 					..Default::default()
 				},
 				None,
@@ -193,6 +186,7 @@ mod tests {
 			"wgpu_context/create_image_texture",
 			test::GoldenOptions::default(),
 			&texture,
+			0,
 		)
 	}
 
@@ -219,6 +213,7 @@ mod tests {
 			"wgpu_context/copy_texture_to_scaled_texture",
 			test::GoldenOptions::default(),
 			&destination_texture,
+			0,
 		)
 	}
 }

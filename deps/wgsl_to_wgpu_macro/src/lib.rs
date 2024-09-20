@@ -1,8 +1,72 @@
 #![cfg_attr(feature = "track_path", feature(track_path))]
 
 extern crate proc_macro;
+
 use quote::quote;
 use wgsl_to_wgpu::*;
+
+mod keywords {
+    syn::custom_keyword!(filterable);
+}
+
+struct FilterableOption {
+    _filterable: keywords::filterable,
+    _colon: syn::Token![:],
+    value: syn::LitBool,
+}
+
+impl syn::parse::Parse for FilterableOption {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self {
+            _filterable: input.parse()?,
+            _colon: input.parse()?,
+            value: input.parse()?,
+        })
+    }
+}
+
+impl FilterableOption {
+    fn value(&self) -> bool {
+        self.value.value
+    }
+}
+
+#[derive(Default)]
+struct MaybeFilterableOption(Option<FilterableOption>);
+
+impl MaybeFilterableOption {
+    fn value(&self) -> bool {
+        self.0.as_ref().map(FilterableOption::value).unwrap_or(true)
+    }
+}
+
+impl syn::parse::Parse for MaybeFilterableOption {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let result = if input.peek(keywords::filterable) {
+            Some(input.parse()?)
+        } else {
+            None
+        };
+        Ok(MaybeFilterableOption(result))
+    }
+}
+
+#[derive(Default)]
+struct ShaderModuleOptions {
+    _where: Option<syn::Token![where]>,
+    filterable: MaybeFilterableOption,
+}
+
+impl syn::parse::Parse for ShaderModuleOptions {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut result = ShaderModuleOptions::default();
+        if input.peek(syn::Token![where]) {
+            result._where = input.parse()?;
+            result.filterable = input.parse()?;
+        }
+        Ok(result)
+    }
+}
 
 struct ShaderModuleInput {
     // We could avoid needing the current_path if we had either:
@@ -13,6 +77,7 @@ struct ShaderModuleInput {
     wgsl_path: syn::LitStr,
     _in: syn::Token![in],
     current_path: syn::LitStr,
+    options: ShaderModuleOptions,
 }
 
 impl syn::parse::Parse for ShaderModuleInput {
@@ -23,6 +88,7 @@ impl syn::parse::Parse for ShaderModuleInput {
             wgsl_path: input.parse()?,
             _in: input.parse()?,
             current_path: input.parse()?,
+            options: input.parse()?,
         })
     }
 }
@@ -38,8 +104,7 @@ fn read_to_string(path: impl AsRef<std::path::Path>) -> String {
 
 fn preprocess_wgsl(current_path: impl AsRef<std::path::Path>, original_source: &str) -> String {
     let current_path = current_path.as_ref();
-    let include_re =
-        regex::Regex::new(r#"\<include!\("(?<path>[^"]*)"\)\s*\{\s*\}"#).unwrap();
+    let include_re = regex::Regex::new(r#"\<include!\("(?<path>[^"]*)"\)\s*\{\s*\}"#).unwrap();
     let mut include_sources = Vec::new();
     include_sources.push("".to_string());
     for capture in include_re.captures_iter(original_source) {
@@ -64,12 +129,6 @@ fn preprocess_wgsl(current_path: impl AsRef<std::path::Path>, original_source: &
 #[proc_macro]
 pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input: ShaderModuleInput = syn::parse_macro_input!(input);
-    let options = wgsl_to_wgpu::WriteOptions {
-        derive_bytemuck_vertex: true,
-        derive_encase_host_shareable: true,
-        matrix_vector_types: MatrixVectorTypes::Glam,
-        ..Default::default()
-    };
     let current_path: std::path::PathBuf = input.current_path.value().into();
     let wgsl_path: std::path::PathBuf = input.wgsl_path.value().into();
     let visibility = input.visibility;
@@ -78,6 +137,14 @@ pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let wgsl_source = read_to_string(&current_wgsl_path);
     let wgsl_source = preprocess_wgsl(current_wgsl_path.parent().unwrap(), &wgsl_source);
+
+    let options = wgsl_to_wgpu::WriteOptions {
+        derive_bytemuck_vertex: true,
+        derive_encase_host_shareable: true,
+        matrix_vector_types: MatrixVectorTypes::Glam,
+        non_filterable: !input.options.filterable.value(),
+        ..Default::default()
+    };
     let rs_source = create_shader_module_embedded(&wgsl_source, options).unwrap();
 
     // We're going more work than strictly necessary here because `wgsl_to_wgpu` internally produces a `TokenStream`, but that's not a big concern.

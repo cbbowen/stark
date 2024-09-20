@@ -166,7 +166,7 @@ impl<T: ?Sized + encase::ShaderType + encase::internal::WriteInto> BindingBuffer
 	}
 
 	/// Builds a buffer with the given initial `value`.
-	#[builder(finish_fn = "create")]
+	#[builder(finish_fn = create)]
 	pub fn init<'a>(
 		#[builder(start_fn)] value: &T,
 		#[builder(finish_fn)] device: &'a wgpu::Device,
@@ -209,7 +209,7 @@ where
 	}
 
 	/// Builds an uninitialized buffer for a type which implements `encase::ShaderSize`.
-	#[builder(finish_fn = "create")]
+	#[builder(finish_fn = create)]
 	pub fn new_sized(
 		#[builder(finish_fn)] device: &wgpu::Device,
 		label: Option<&str>,
@@ -229,7 +229,7 @@ where
 	/// Builds a buffer with the given initial `value`. The value must implement
 	/// `encase::ShaderSize`. Functionally, this is equivalent to `init` but avoids an extra
 	/// allocation.
-	#[builder(finish_fn = "create")]
+	#[builder(finish_fn = create)]
 	pub fn init_sized<'a>(
 		#[builder(start_fn)] value: &T,
 		#[builder(finish_fn)] device: &'a wgpu::Device,
@@ -260,7 +260,7 @@ where
 impl<T: ?Sized + encase::CalculateSizeFor> BindingBuffer<T> {
 	/// Builds an uninitialized buffer for a type which implements `encase::CalculateSizeFor` with
 	/// `capacity` elements.
-	#[builder(finish_fn = "create")]
+	#[builder(finish_fn = create)]
 	pub fn with_capacity<'a>(
 		#[builder(start_fn)] capacity: u64,
 		#[builder(finish_fn)] device: &'a wgpu::Device,

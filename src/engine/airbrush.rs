@@ -370,7 +370,7 @@ mod tests {
 	fn shape() {
 		for y in [0.0, 0.5, 1.0] {
 			println!("y = {y}");
-			let shape = generate_shape_row(y, 8).collect_vec();
+			let shape = generate_test_shape_row(y, 8).collect_vec();
 			println!("  {shape:?}");
 		}
 	}
@@ -379,7 +379,7 @@ mod tests {
 	fn preprocess_shape() {
 		for opacity in [0.0, 0.25, 0.5, 0.75, 1.0] {
 			println!("opacity = {opacity}");
-			let shape = preprocess_shape_row(generate_shape_row(0.0, 8), opacity).collect_vec();
+			let shape = preprocess_shape_row(generate_test_shape_row(0.0, 8), opacity).collect_vec();
 			println!("  {shape:?}");
 		}
 	}

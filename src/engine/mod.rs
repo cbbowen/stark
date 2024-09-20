@@ -13,3 +13,5 @@ pub use airbrush::*;
 pub mod raster;
 
 mod embedded_shapes;
+
+mod process_shape;
