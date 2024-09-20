@@ -19,9 +19,9 @@ pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
 #[component]
 pub fn Home() -> impl IntoView {
 	let brush_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
-	let input_brush_size = RwSignal::new(4.0);
+	let input_brush_size = RwSignal::new(16.0);
 	let brush_opacity = RwSignal::new(1.0);
-	let brush_rate = RwSignal::new(1.0);
+	let brush_rate = RwSignal::new(25.0);
 
 	let brush_size = create_derived(move || {
 		let input_brush_size = input_brush_size.get();
@@ -54,8 +54,8 @@ pub fn Home() -> impl IntoView {
 								<thaw::Slider
 									value=input_brush_size
 									min=1.0
-									max=16.0
-									step=0.5
+									max=32.0
+									step=1.0
 								></thaw::Slider>
 							</BrushSetting>
 							<BrushSetting name="Opacity">
@@ -70,8 +70,8 @@ pub fn Home() -> impl IntoView {
 								<thaw::Slider
 									value=brush_rate
 									min=0.0
-									max=2.0
-									step=0.05
+									max=100.0
+									step=5.0
 								></thaw::Slider>
 							</BrushSetting>
 						</Panel>

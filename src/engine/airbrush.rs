@@ -6,6 +6,8 @@ use glam::{vec2, Vec2};
 use itertools::Itertools;
 use wgpu::util::DeviceExt;
 
+use super::embedded_shapes;
+
 fn create_vertex_buffer(
 	device: &wgpu::Device,
 ) -> (wgpu::VertexBufferLayout<'static>, wgpu::Buffer) {
@@ -81,6 +83,13 @@ pub fn preprocess_shape_row(
 		})
 }
 
+pub fn preprocess_shape(shape: &embedded_shapes::Shape, opacity: f32) -> impl Iterator<Item = f32> + use<'_> {
+	shape
+		.values
+		.chunks_exact(shape.width as usize)
+		.flat_map(move |row| preprocess_shape_row(row.into_iter().copied(), opacity))
+}
+
 pub fn uniform_samples(size: u32) -> impl ExactSizeIterator<Item = f32> {
 	let scale = 1.0 / (size as f32 - 1.0);
 	(0..size).map(move |i| scale * i as f32)
@@ -90,34 +99,45 @@ pub fn centered_uniform_samples(size: u32) -> impl ExactSizeIterator<Item = f32>
 	uniform_samples(size).map(|x| 2.0 * x - 1.0)
 }
 
-pub fn generate_shape_row(y: f32, width: u32) -> impl ExactSizeIterator<Item = f32> {
+pub fn generate_test_shape_row(y: f32, width: u32) -> impl ExactSizeIterator<Item = f32> {
 	const SHAPE: f32 = 1.0;
 	centered_uniform_samples(width).map(move |x| (1.0 - (x * x + y * y).powf(SHAPE)).max(0.0))
 }
 
-fn create_shape_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
-	let size = 64u32;
-	let opacity_levels = 8;
+pub fn generate_test_shape(size: u32) -> embedded_shapes::Shape {
+	let values = centered_uniform_samples(size)
+		.flat_map(move |y| generate_test_shape_row(y, size))
+		.collect();
+	embedded_shapes::Shape {
+		width: size,
+		height: size,
+		values,
+	}
+}
 
-	let data = uniform_samples(opacity_levels).flat_map(move |opacity| {
-		centered_uniform_samples(size)
-			.flat_map(move |y| preprocess_shape_row(generate_shape_row(y, size), opacity))
-	});
+fn create_shape_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureView {
+	let opacity_levels = 4;
+
+	// let shape = generate_test_shape(64);
+	let shape = embedded_shapes::get_shape_00507();
+
+	let texture_data =
+		uniform_samples(opacity_levels).flat_map(|opacity| preprocess_shape(&shape, opacity));
 
 	// let format = wgpu::TextureFormat::R8Snorm;
 	// let data = data.map(|v| (v.clamp(-1.0, 1.0) * 127.0) as i8);
 
 	let format = wgpu::TextureFormat::R16Float;
-	let data = data.map(half::f16::from_f32);
+	let texture_data = texture_data.map(half::f16::from_f32);
 
-	let data: Vec<_> = data.collect();
+	let texture_data: Vec<_> = texture_data.collect();
 	let texture = device.create_texture_with_data(
 		queue,
 		&wgpu::TextureDescriptor {
 			label: None,
 			size: wgpu::Extent3d {
-				width: size,
-				height: size,
+				width: shape.width,
+				height: shape.height,
 				depth_or_array_layers: opacity_levels,
 			},
 			mip_level_count: 1,
@@ -128,7 +148,7 @@ fn create_shape_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Tex
 			view_formats: &[format],
 		},
 		wgpu::util::TextureDataOrder::default(),
-		bytemuck::cast_slice(&data),
+		bytemuck::cast_slice(&texture_data),
 	);
 	texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
