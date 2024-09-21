@@ -1,18 +1,18 @@
 use std::sync::*;
 use std::task::*;
 
-struct CallbackFutureState<Output> {
+struct PromiseState<Output> {
 	result: Option<Output>,
 	waker: Option<Waker>,
 }
 
-pub struct CallbackFuture<Output> {
-	state: Arc<Mutex<CallbackFutureState<Output>>>,
+pub struct Promise<Output> {
+	state: Arc<Mutex<PromiseState<Output>>>,
 }
 
-impl<Output> CallbackFuture<Output> {
+impl<Output> Promise<Output> {
 	pub fn new() -> (Self, impl FnOnce(Output)) {
-		let state = std::sync::Arc::new(std::sync::Mutex::new(CallbackFutureState {
+		let state = std::sync::Arc::new(std::sync::Mutex::new(PromiseState {
 			result: Default::default(),
 			waker: Default::default(),
 		}));
@@ -24,11 +24,11 @@ impl<Output> CallbackFuture<Output> {
 				state.waker.take().map(&std::task::Waker::wake);
 			}
 		};
-		(CallbackFuture { state }, callback)
+		(Promise { state }, callback)
 	}
 }
 
-impl<Output> std::future::Future for CallbackFuture<Output> {
+impl<Output> std::future::Future for Promise<Output> {
 	type Output = Output;
 	fn poll(
 		self: std::pin::Pin<&mut Self>,

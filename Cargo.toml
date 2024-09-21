@@ -23,9 +23,9 @@ wgpu = { version = "22.1", features = [
 	# Enable the "webgl" feature to support older browsers.
 	"webgl",
 	# We only have a single thread in WASM, so make everything Send+Sync.
-	"fragile-send-sync-non-atomic-wasm"
+	"fragile-send-sync-non-atomic-wasm",
 ] }
-bytemuck = { version = "1.17", features = ["derive"] }
+bytemuck = { version = "1.17", features = ["derive", "extern_crate_alloc"] }
 encase = { version = "0.9.0", features = ["glam"] }
 # This must match the version supported by encase.
 glam = { version = "0.28", features = ["bytemuck"] }
@@ -39,9 +39,16 @@ csscolorparser = "0.7"
 half = { version = "2.4", features = ["bytemuck"] }
 ordered-float = { version = "4.2", features = ["bytemuck"] }
 bon = "2.3"
-png = { version = "0.17", optional = true }
 base64 = { version = "0.22", optional = true }
-image = { version = "0.25", default-features = false, features = ["png"] }
+derive_more = { version = "1.0", features = ["display"] }
+zune-image = { version = "0.4", default-features = false, features = [
+	"log",
+	"png",
+	"simd",
+	# We don't actually need metadata, but zune-image fails to build without it.
+	"metadata",
+] }
+zune-core = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 wasm-bindgen = "0.2"
@@ -73,8 +80,8 @@ csr = [
 # Our code will use "tracing" exclusively.
 log = ["dep:log", "dep:tracing-log", "tracing/log"]
 debug = [
-	"dep:png",
-	"dep:base64"
+	# "dep:png",
+	"dep:base64",
 ]
 
 [profile.test]

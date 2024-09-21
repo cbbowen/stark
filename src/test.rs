@@ -1,10 +1,13 @@
 
-use debug::SubpixelFormat;
+use itertools::Itertools;
 
 use crate::*;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::ops::Deref;
 use std::sync::Arc;
+use crate::util::ImageExt;
+use zune_image::image::Image;
+use zune_image::codecs::ImageFormat;
 
 pub struct WgpuTestContext {
 	context: Arc<WgpuContext>,
@@ -24,7 +27,7 @@ pub struct GoldenOptions {
 	pub width: u32,
 	pub height: u32,
 	pub quantile: f32,
-	pub threshold: i16,
+	pub threshold: f32,
 }
 
 impl Default for GoldenOptions {
@@ -34,7 +37,7 @@ impl Default for GoldenOptions {
 			width: 128,
 			height: 128,
 			quantile: 0.99,
-			threshold: 1,
+			threshold: 0.01,
 		}
 	}
 }
@@ -58,18 +61,16 @@ impl WgpuTestContext {
 	}
 
 	pub fn create_image_texture(&self, path: &str) -> anyhow::Result<wgpu::Texture> {
-		let mut buffer = Vec::new();
-		std::fs::File::open(path)?.read_to_end(&mut buffer)?;
-		let buffer = image::load_from_memory(&buffer)?.to_rgba8();
+		let image = Image::open(path)?;
+		let (data, width, height, format) = image.into_texture_data();
 
-		let format = wgpu::TextureFormat::Rgba8UnormSrgb;
 		Ok(render::texture()
-			.width(buffer.width())
-			.height(buffer.height())
+			.width(width)
+			.height(height)
 			.format(format)
 			.usage(wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::TEXTURE_BINDING)
 			.view_formats(&[format.remove_srgb_suffix()])
-			.with_data((self.queue(), &buffer))
+			.with_data((self.queue(), &data))
 			.create(self.device()))
 	}
 
@@ -190,8 +191,7 @@ impl WgpuTestContext {
 		layer_index: u32
 	) -> anyhow::Result<()> {
 		let data = pollster::block_on(self.get_texture_layer_data(texture, layer_index))?;
-		let width = texture.width();
-		let height = texture.height();
+		let mut image = Image::from_texture_data(&data, texture.width(), texture.height(), texture.format())?;
 
 		let mut path = std::env::current_dir()?;
 		path.extend(["test", "output", name]);
@@ -200,32 +200,22 @@ impl WgpuTestContext {
 			std::fs::create_dir_all(parent)?;
 		}
 
-		let format = texture.format();
-		let subpixel_format = debug::SubpixelFormat::of_texture(format)?;
-		let subpixel_format = subpixel_format.preferred_image_format(format.components());
-		if let Ok(file) = std::fs::File::create_new(path.as_path()) {
-			let file = std::io::BufWriter::new(file);
-			debug::encode_png(&data, width, height, format, Some(subpixel_format), file)
-		} else {
-			let golden_decoder = png::Decoder::new(std::fs::File::open(path)?);
-			let mut golden_reader = golden_decoder.read_info()?;
-			let mut golden_data = vec![0; golden_reader.output_buffer_size()];
-			let golden_info = golden_reader.next_frame(&mut golden_data)?;
-			assert_eq!(golden_info.width, width);
-			assert_eq!(golden_info.height, height);
-			assert_eq!(golden_info.color_type, debug::png_color_components(format.components()).unwrap());
-			assert_eq!(golden_info.bit_depth, subpixel_format.png_bit_depth().unwrap());
-			assert_eq!(golden_data.len(), data.len());
-
-			let mut differences = golden_data
-				.iter()
-				.zip(data.iter())
-				.map(|(a, b)| (*a as i16 - *b as i16).abs())
-				.collect::<Vec<_>>();
-			let quantile_index = (options.quantile * differences.len() as f32).floor() as usize;
-			assert!(*differences.select_nth_unstable(quantile_index).1 <= options.threshold);
-
-			Ok(())
+		if let Ok(mut file) = std::fs::File::create_new(&path) {
+			let data = image.write_to_vec(ImageFormat::PNG)?;
+			file.write_all(&data);
+			return Ok(());
 		}
+
+		let mut golden = Image::open(&path)?;
+		assert_eq!(image.dimensions(), golden.dimensions());
+		let mut differences = golden.convert_to_f32_subpixels()
+			.into_iter()
+			.zip_eq(image.convert_to_f32_subpixels())
+			.map(|(a, b)| (a - b).abs())
+			.collect::<Vec<_>>();
+		let quantile_index = (options.quantile * differences.len() as f32).floor() as usize;
+		assert!(*differences.select_nth_unstable_by(quantile_index, |l, r| l.total_cmp(r)).1 <= options.threshold);
+
+		Ok(())
 	}
 }

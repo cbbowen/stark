@@ -26,8 +26,11 @@ pub use oklab::*;
 mod piecewise_linear;
 pub use piecewise_linear::*;
 
-mod callback_future;
-pub use callback_future::*;
+mod promise;
+pub use promise::*;
+
+mod image;
+pub use image::ImageExt;
 
 use leptos::wasm_bindgen;
 use leptos::web_sys;
@@ -250,8 +253,8 @@ impl DeviceExt for wgpu::Device {
 	) -> impl std::future::Future<Output = anyhow::Result<Vec<u8>>> {
 		async move {
 			let slice = buffer.slice(..);
-			let (map_async_future, callback) = CallbackFuture::new();
-			slice.map_async(wgpu::MapMode::Read, callback);
+			let (map_async_future, fulfill) = Promise::new();
+			slice.map_async(wgpu::MapMode::Read, fulfill);
 			self.poll(wgpu::Maintain::wait());
 			map_async_future.await?;
 			Ok(slice.get_mapped_range().to_vec())
