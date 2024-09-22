@@ -3,15 +3,18 @@
 * Beautiful Lab colors, both for picking and blending.
 * Full GPU acceleration.
 * Continuous brushes.
-* (in-progress) Infinite canvas.
+* Infinite canvas.
 * (in-progress) Infinite undo history.
 * (maybe) Collaborative editing.
 
 # Plan
 
-* Use https://crates.io/crates/bresenham_zip to compute tiles from stroke topology.
-* Multisampling in the compositing pipeline.
-* Rauch-Tung-Striebel stroke smoothing.
+* B-Spline or Rauch-Tung-Striebel stroke smoothing.
+* History
+  * Enables: Saving
+* Undo
+* Refactor out stroke topology generation.
+  * Enables: Second brush engine.
 
 # Dependencies
 

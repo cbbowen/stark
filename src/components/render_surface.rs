@@ -236,7 +236,7 @@ pub fn RenderSurface(
 	Effect::new(move |_| try_render());
 
 	// On resize, try to render. Note that this will additionally reconfigure if the surface is lost.
-	leptos_use::use_resize_observer(node_ref.get(), move |entries, _| {
+	leptos_use::use_resize_observer(node_ref, move |entries, _| {
 		let Some(entry) = entries.last() else {
 			return;
 		};

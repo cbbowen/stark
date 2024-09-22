@@ -102,6 +102,16 @@ fn read_to_string(path: impl AsRef<std::path::Path>) -> String {
     std::fs::read_to_string(path).unwrap()
 }
 
+// TODO: Replace `preprocess_wgsl` with https://crates.io/crates/naga_oil. I want to be able to write:
+/*
+shaders! {
+  mod oklab;
+  mod dither;
+  pub mod canvas;
+  pub mod airbrush;
+}
+*/
+
 fn preprocess_wgsl(current_path: impl AsRef<std::path::Path>, original_source: &str) -> String {
     let current_path = current_path.as_ref();
     let include_re = regex::Regex::new(r#"\<include!\("(?<path>[^"]*)"\)\s*\{\s*\}"#).unwrap();
@@ -146,10 +156,8 @@ pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 		  force_override_constants: true,
         ..Default::default()
     };
-    let rs_source = create_shader_module_embedded(&wgsl_source, options).unwrap();
-
-    // We're going more work than strictly necessary here because `wgsl_to_wgpu` internally produces a `TokenStream`, but that's not a big concern.
-    let rs_source: proc_macro2::TokenStream = rs_source.parse().unwrap();
+	 let module = naga::front::wgsl::parse_str(&wgsl_source).unwrap();
+    let rs_source = create_shader_module_tokens(&module, options).unwrap();
 
     let name_parts: Vec<_> = wgsl_path
         .with_extension("")

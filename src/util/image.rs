@@ -29,7 +29,7 @@ pub trait ImageExt: Sized {
 
 impl ImageExt for zune_image::image::Image {
 	fn convert_to_u8_subpixels(&mut self) -> Vec<u8> {
-		self.convert_depth(BitDepth::Eight);
+		self.convert_depth(BitDepth::Eight).unwrap();
 		let channels = self.frames_ref()[0].channels_ref(self.colorspace(), false);
 		let size: usize = channels.iter().map(|c| c.len()).sum();
 		let len = size.div_ceil(std::mem::size_of::<u8>());
@@ -41,7 +41,7 @@ impl ImageExt for zune_image::image::Image {
 	}
 
 	fn convert_to_u16_subpixels(&mut self) -> Vec<u16> {
-		self.convert_depth(BitDepth::Sixteen);
+		self.convert_depth(BitDepth::Sixteen).unwrap();
 		let channels = self.frames_ref()[0].channels_ref(self.colorspace(), false);
 		let size: usize = channels.iter().map(|c| c.len()).sum();
 		let len = size.div_ceil(std::mem::size_of::<u16>());
@@ -53,7 +53,7 @@ impl ImageExt for zune_image::image::Image {
 	}
 
 	fn convert_to_f32_subpixels(&mut self) -> Vec<f32> {
-		self.convert_depth(BitDepth::Float32);
+		self.convert_depth(BitDepth::Float32).unwrap();
 		let channels = self.frames_ref()[0].channels_ref(self.colorspace(), false);
 		let size: usize = channels.iter().map(|c| c.len()).sum();
 		let len = size.div_ceil(std::mem::size_of::<f32>());
