@@ -1,18 +1,17 @@
-
 use itertools::Itertools;
 
+use crate::util::ImageExt;
 use crate::*;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::ops::Deref;
 use std::sync::Arc;
-use crate::util::ImageExt;
-use zune_image::image::Image;
 use zune_image::codecs::ImageFormat;
+use zune_image::image::Image;
 
 pub struct WgpuTestContext {
 	context: Arc<WgpuContext>,
 
-	copy_transform: render::Shader,
+	copy_transform: shaders::copy_transform::Shader,
 }
 
 impl Deref for WgpuTestContext {
@@ -47,11 +46,7 @@ impl WgpuTestContext {
 		let context = pollster::block_on(WgpuContext::new())?;
 		let device = context.device();
 
-		let copy_transform = render::Shader {
-			module: shaders::copy_transform::create_shader_module(device),
-			layout: shaders::copy_transform::create_pipeline_layout(device),
-		}
-		.into();
+		let copy_transform = shaders::copy_transform::Shader::new(device);
 
 		let context = Arc::new(context);
 		Ok(Self {
@@ -93,26 +88,18 @@ impl WgpuTestContext {
 			..Default::default()
 		});
 
-		let transform_buffer = render::BindingBuffer::init_sized(&glam::Mat2::IDENTITY).create(device);
+		let transform_buffer =
+			render::BindingBuffer::init_sized(&glam::Mat2::IDENTITY).create(device);
 
 		use shaders::copy_transform::*;
-		let module = &self.copy_transform.module;
-		let pipeline = render::render_pipeline()
-			.layout(&self.copy_transform.layout)
-			.vertex(wgpu::VertexState {
-				module,
-				entry_point: ENTRY_VS_MAIN,
-				compilation_options: Default::default(),
-				buffers: &[],
-			})
-			.fragment(fragment_state(
-				module,
-				&fs_main_entry([Some(wgpu::ColorTargetState {
-					format: destination.format(),
-					blend: Some(wgpu::BlendState::REPLACE),
-					write_mask: wgpu::ColorWrites::ALL,
-				})]),
-			))
+		let pipeline = Shader::new(device)
+			.pipeline()
+			.vertex_buffer_layouts(&[])
+			.targets([Some(wgpu::ColorTargetState {
+				format: destination.format(),
+				blend: Some(wgpu::BlendState::REPLACE),
+				write_mask: wgpu::ColorWrites::ALL,
+			})])
 			.create(device);
 		let bind_group = bind_groups::BindGroup0::from_bindings(
 			device,
@@ -188,10 +175,11 @@ impl WgpuTestContext {
 		name: &str,
 		options: GoldenOptions,
 		texture: &wgpu::Texture,
-		layer_index: u32
+		layer_index: u32,
 	) -> anyhow::Result<()> {
 		let data = pollster::block_on(self.get_texture_layer_data(texture, layer_index))?;
-		let mut image = Image::from_texture_data(&data, texture.width(), texture.height(), texture.format())?;
+		let mut image =
+			Image::from_texture_data(&data, texture.width(), texture.height(), texture.format())?;
 
 		let mut path = std::env::current_dir()?;
 		path.extend(["test", "output", name]);
@@ -208,13 +196,18 @@ impl WgpuTestContext {
 
 		let mut golden = Image::open(&path)?;
 		assert_eq!(image.dimensions(), golden.dimensions());
-		let mut differences = golden.convert_to_f32_subpixels()
+		let mut differences = golden
+			.convert_to_f32_subpixels()
 			.into_iter()
 			.zip_eq(image.convert_to_f32_subpixels())
 			.map(|(a, b)| (a - b).abs())
 			.collect::<Vec<_>>();
 		let quantile_index = (options.quantile * differences.len() as f32).floor() as usize;
-		assert!(*differences.select_nth_unstable_by(quantile_index, |l, r| l.total_cmp(r)).1 <= options.threshold);
+		assert!(
+			*differences
+				.select_nth_unstable_by(quantile_index, |l, r| l.total_cmp(r))
+				.1 <= options.threshold
+		);
 
 		Ok(())
 	}

@@ -6,6 +6,7 @@ use engine::*;
 use glam::*;
 use leptos::prelude::*;
 use leptos_use::{use_element_size, UseElementSizeReturn};
+use shaders::canvas::*;
 use std::sync::{Arc, RwLock};
 use util::CoordinateSource;
 use util::LocalCallback;
@@ -18,29 +19,20 @@ const MULTISAMPLE_COUNT: u32 = 4;
 fn canvas_render_pipeline<'a>(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
-	buffer_layouts: &[VertexBufferLayout<'a>],
-	shader: &render::Shader,
+	// TODO: Change the API and use this.
+	buffer_layouts: &[VertexBufferLayout<'a>; 1],
+	shader: &Shader,
 ) -> wgpu::RenderPipeline {
-	use shaders::canvas::*;
-	let module = &shader.module;
-	render::render_pipeline()
+	shader
+		.pipeline()
 		.label("Canvas")
-		.layout(&shader.layout)
-		.vertex(wgpu::VertexState {
-			module,
-			entry_point: ENTRY_VS_MAIN,
-			compilation_options: Default::default(),
-			buffers: buffer_layouts,
-		})
-		.fragment(fragment_state(
-			module,
-			&fs_main_entry([Some(wgpu::ColorTargetState {
-				format: texture_format,
-				// TODO: We will probably need to change this to support layers.
-				blend: Some(wgpu::BlendState::REPLACE),
-				write_mask: wgpu::ColorWrites::ALL,
-			})]),
-		))
+		.vertex_buffer_layouts(buffer_layouts)
+		.targets([Some(wgpu::ColorTargetState {
+			format: texture_format,
+			// TODO: We will probably need to change this to support layers.
+			blend: Some(wgpu::BlendState::REPLACE),
+			write_mask: wgpu::ColorWrites::ALL,
+		})])
 		.multisample(wgpu::MultisampleState {
 			count: MULTISAMPLE_COUNT,
 			..Default::default()

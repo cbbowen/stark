@@ -25,28 +25,18 @@ fn create_bind_group(device: &wgpu::Device) -> (bind_groups::BindGroup0, Binding
 fn create_render_pipeline(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
-	shader: &render::Shader,
+	shader: &Shader,
 ) -> wgpu::RenderPipeline {
-	render::render_pipeline()
+	shader
+		.pipeline()
 		.label("ColorPicker")
-		.layout(&shader.layout)
-		.vertex(wgpu::VertexState {
-			module: &shader.module,
-			entry_point: ENTRY_VS_MAIN,
-			compilation_options: Default::default(),
-			buffers: &[],
-		})
-		.fragment(fragment_state(
-			&shader.module,
-			&fs_main_entry(
-				[Some(wgpu::ColorTargetState {
-					format: texture_format,
-					blend: Some(wgpu::BlendState::REPLACE),
-					write_mask: wgpu::ColorWrites::ALL,
-				})],
-				&OverrideConstants { proof: None },
-			),
-		))
+		.vertex_buffer_layouts(&[])
+		.targets([Some(wgpu::ColorTargetState {
+			format: texture_format,
+			blend: Some(wgpu::BlendState::REPLACE),
+			write_mask: wgpu::ColorWrites::ALL,
+		})])
+		.overrides(OverrideConstants { proof: None })
 		.create(device)
 }
 

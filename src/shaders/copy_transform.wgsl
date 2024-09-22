@@ -6,10 +6,6 @@ var source_texture: texture_2d<f32>;
 @group(0) @binding(2)
 var source_sampler: sampler;
 
-struct VertexInput {
-	@builtin(vertex_index) index: u32,
-};
-
 struct VertexOutput {
 	@builtin(position) destination_position: vec4<f32>,
 	@location(0) source_position: vec2<f32>,
@@ -17,10 +13,10 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
-    vertex: VertexInput,
+    @builtin(vertex_index) vertex_index: u32,
 ) -> VertexOutput {
-	let x = f32(vertex.index & 1u);
-	let y = 0.5 * f32(vertex.index & 2u);
+	let x = f32(vertex_index & 1u);
+	let y = 0.5 * f32(vertex_index & 2u);
 	let source_position = vec2(x, y);
 
 	let centered_position = vec2(2.0, -2.0) * (source_position - 0.5);

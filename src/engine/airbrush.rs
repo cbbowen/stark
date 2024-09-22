@@ -1,7 +1,7 @@
 use crate::engine::atlas;
 use crate::render::{BindingBuffer, Resources};
 use crate::shaders::airbrush::*;
-use crate::{render, util::PiecewiseLinear};
+use crate::util::PiecewiseLinear;
 use glam::{vec2, Vec2};
 use itertools::Itertools;
 use wgpu::util::DeviceExt;
@@ -24,26 +24,18 @@ fn create_vertex_buffer(
 fn create_pipeline(
 	device: &wgpu::Device,
 	texture_format: wgpu::TextureFormat,
-	shader: &render::Shader,
+	shader: &Shader,
 	vertex_buffer_layout: wgpu::VertexBufferLayout<'_>,
 ) -> wgpu::RenderPipeline {
-	render::render_pipeline()
+	shader
+		.pipeline()
 		.label("airbrush")
-		.layout(&shader.layout)
-		.vertex(wgpu::VertexState {
-			module: &shader.module,
-			entry_point: ENTRY_VS_MAIN,
-			compilation_options: Default::default(),
-			buffers: &[vertex_buffer_layout],
-		})
-		.fragment(fragment_state(
-			&shader.module,
-			&fs_main_entry([Some(wgpu::ColorTargetState {
-				format: texture_format,
-				blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-				write_mask: wgpu::ColorWrites::ALL,
-			})]),
-		))
+		.vertex_buffer_layouts(&[vertex_buffer_layout])
+		.targets([Some(wgpu::ColorTargetState {
+			format: texture_format,
+			blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+			write_mask: wgpu::ColorWrites::ALL,
+		})])
 		.create(device)
 }
 
@@ -83,7 +75,10 @@ pub fn preprocess_shape_row(
 		})
 }
 
-pub fn preprocess_shape(shape: &embedded_shapes::Shape, opacity: f32) -> impl Iterator<Item = f32> + use<'_> {
+pub fn preprocess_shape(
+	shape: &embedded_shapes::Shape,
+	opacity: f32,
+) -> impl Iterator<Item = f32> + use<'_> {
 	shape
 		.values
 		.chunks_exact(shape.width as usize)

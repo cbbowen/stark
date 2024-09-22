@@ -1,5 +1,5 @@
 mod resources;
-use std::{borrow::Borrow, mem::MaybeUninit, num::NonZero, ops::Deref};
+use std::{borrow::Borrow, mem::MaybeUninit, ops::Deref};
 
 use bon::{bon, builder};
 pub use resources::*;
@@ -7,42 +7,9 @@ use thiserror::Error;
 use wgpu::util::DeviceExt;
 
 #[derive(Debug)]
-pub struct Shader {
+pub struct ComputeShader {
 	pub module: wgpu::ShaderModule,
 	pub layout: wgpu::PipelineLayout,
-}
-
-#[builder(finish_fn = create)]
-pub fn render_pipeline<'a>(
-	#[builder(finish_fn)] device: &wgpu::Device,
-	label: Option<&str>,
-	layout: Option<&wgpu::PipelineLayout>,
-	vertex: wgpu::VertexState<'a>,
-	fragment: Option<wgpu::FragmentState<'a>>,
-	depth_stencil: Option<wgpu::DepthStencilState>,
-	#[builder(default)] multisample: wgpu::MultisampleState,
-	multiview: Option<NonZero<u32>>,
-	cache: Option<&wgpu::PipelineCache>,
-) -> wgpu::RenderPipeline {
-	device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-		label,
-		layout,
-		vertex,
-		fragment,
-		primitive: wgpu::PrimitiveState {
-			topology: wgpu::PrimitiveTopology::TriangleStrip,
-			strip_index_format: None,
-			front_face: wgpu::FrontFace::Ccw,
-			cull_mode: None,
-			polygon_mode: wgpu::PolygonMode::Fill,
-			unclipped_depth: false,
-			conservative: false,
-		},
-		depth_stencil,
-		multisample,
-		multiview,
-		cache,
-	})
 }
 
 #[derive(Debug, Error)]

@@ -7,10 +7,6 @@ var<uniform> canvas_to_view: mat4x4<f32>;
 
 include!("tile_read.wgsl") {}
 
-struct VertexInput {
-	@builtin(vertex_index) index: u32,
-}
-
 struct VertexOutput {
 	@location(0) chart_position: vec2<f32>,
 	@location(1) @interpolate(flat) layer_index: u32,
@@ -19,11 +15,11 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
+	@builtin(vertex_index) vertex_index: u32,
 	instance: InstanceInput,
-	vertex: VertexInput,
 ) -> VertexOutput {
-	let x = f32(vertex.index & 1u);
-	let y = 0.5 * f32(vertex.index & 2u);
+	let x = f32(vertex_index & 1u);
+	let y = 0.5 * f32(vertex_index & 2u);
 	let chart_position = vec2<f32>(x, y);
 
 	let layer_tile_data = tile_data[instance.layer_index];

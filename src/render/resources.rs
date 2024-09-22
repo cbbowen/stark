@@ -1,48 +1,34 @@
-use super::Shader;
-use crate::shaders;
+use super::ComputeShader;
+use crate::shaders::interface::RenderShader;
+use crate::shaders::*;
 
 /// Resources that only need to be loaded once for a given device.
 #[derive(Debug)]
 pub struct Resources {
-	pub canvas: Shader,
-	pub airbrush: Shader,
-	pub color_picker: Shader,
-	pub copy_transform: Shader,
-	pub log_transform: Shader,
-	pub horizontal_scan: Shader,
+	pub canvas: canvas::Shader,
+	pub airbrush: airbrush::Shader,
+	pub color_picker: color_picker::Shader,
+	pub copy_transform: copy_transform::Shader,
+	pub log_transform: ComputeShader,
+	pub horizontal_scan: ComputeShader,
 }
 
 impl Resources {
 	pub fn new(device: &wgpu::Device) -> Self {
 		Resources {
-			canvas: Shader {
-				module: shaders::canvas::create_shader_module(device),
-				layout: shaders::canvas::create_pipeline_layout(device),
+			canvas: RenderShader::new(device),
+			airbrush: RenderShader::new(device),
+			color_picker: RenderShader::new(device),
+			copy_transform: RenderShader::new(device),
+
+			horizontal_scan: ComputeShader {
+				module: horizontal_scan::create_shader_module(device),
+				layout: horizontal_scan::create_pipeline_layout(device),
 			},
 
-			airbrush: Shader {
-				module: shaders::airbrush::create_shader_module(device),
-				layout: shaders::airbrush::create_pipeline_layout(device),
-			},
-
-			color_picker: Shader {
-				module: shaders::color_picker::create_shader_module(device),
-				layout: shaders::color_picker::create_pipeline_layout(device),
-			},
-
-			copy_transform: Shader {
-				module: shaders::copy_transform::create_shader_module(device),
-				layout: shaders::copy_transform::create_pipeline_layout(device),
-			},
-
-			horizontal_scan: Shader {
-				module: shaders::horizontal_scan::create_shader_module(device),
-				layout: shaders::horizontal_scan::create_pipeline_layout(device),
-			},
-
-			log_transform: Shader {
-				module: shaders::log_transform::create_shader_module(device),
-				layout: shaders::log_transform::create_pipeline_layout(device),
+			log_transform: ComputeShader {
+				module: log_transform::create_shader_module(device),
+				layout: log_transform::create_pipeline_layout(device),
 			},
 		}
 	}

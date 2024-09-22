@@ -1,11 +1,11 @@
 use itertools::Itertools;
-use std::{future::Future, io::Write, u16, u8};
+use std::{future::Future, u8};
 use thiserror::Error;
 
-use zune_image::image::Image;
-use zune_image::codecs::ImageFormat;
 use crate::util::ImageExt;
 use crate::WgpuContext;
+use zune_image::codecs::ImageFormat;
+use zune_image::image::Image;
 
 #[derive(Copy, Clone, Debug, Error)]
 #[error("`debug` feature not enabled")]

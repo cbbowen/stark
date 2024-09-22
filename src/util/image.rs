@@ -96,9 +96,15 @@ impl ImageExt for zune_image::image::Image {
 		};
 		self.convert_color(color).unwrap();
 		let data = match depth {
-			BitDepth::Eight => bytemuck::cast_slice_box(self.convert_to_u8_subpixels().into_boxed_slice()),
-			BitDepth::Sixteen => bytemuck::cast_slice_box(self.convert_to_u16_subpixels().into_boxed_slice()),
-			BitDepth::Float32 => bytemuck::cast_slice_box(self.convert_to_f32_subpixels().into_boxed_slice()),
+			BitDepth::Eight => {
+				bytemuck::cast_slice_box(self.convert_to_u8_subpixels().into_boxed_slice())
+			}
+			BitDepth::Sixteen => {
+				bytemuck::cast_slice_box(self.convert_to_u16_subpixels().into_boxed_slice())
+			}
+			BitDepth::Float32 => {
+				bytemuck::cast_slice_box(self.convert_to_f32_subpixels().into_boxed_slice())
+			}
 			_ => unreachable!(),
 		};
 		let (width, height) = self.dimensions();

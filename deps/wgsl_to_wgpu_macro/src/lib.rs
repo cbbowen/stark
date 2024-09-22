@@ -143,6 +143,7 @@ pub fn shader(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         derive_encase_host_shareable: true,
         matrix_vector_types: MatrixVectorTypes::Glam,
         non_filterable: !input.options.filterable.value(),
+		  force_override_constants: true,
         ..Default::default()
     };
     let rs_source = create_shader_module_embedded(&wgsl_source, options).unwrap();

@@ -1,7 +1,7 @@
 use core::f32;
 
-use crate::render::*;
 use crate::shaders::{copy_transform, horizontal_scan, log_transform};
+use crate::render::*;
 use bon::builder;
 use glam::*;
 use thiserror::Error;
@@ -46,23 +46,15 @@ pub fn rotations(
 		.create(device);
 
 	let copy_transform_shader = &resources.copy_transform;
-	let copy_transform_pipeline = render_pipeline()
+	let copy_transform_pipeline = copy_transform_shader
+		.pipeline()
 		.label("generate_rotations::copy_transform")
-		.layout(&copy_transform_shader.layout)
-		.vertex(wgpu::VertexState {
-			module: &copy_transform_shader.module,
-			entry_point: copy_transform::ENTRY_VS_MAIN,
-			compilation_options: Default::default(),
-			buffers: &[],
-		})
-		.fragment(copy_transform::fragment_state(
-			&copy_transform_shader.module,
-			&copy_transform::fs_main_entry([Some(wgpu::ColorTargetState {
-				format,
-				blend: Some(wgpu::BlendState::REPLACE),
-				write_mask: wgpu::ColorWrites::ALL,
-			})]),
-		))
+		.vertex_buffer_layouts(&[])
+		.targets([Some(wgpu::ColorTargetState {
+			format,
+			blend: Some(wgpu::BlendState::REPLACE),
+			write_mask: wgpu::ColorWrites::ALL,
+		})])
 		.create(device);
 
 	let source_view = source.create_view(&wgpu::TextureViewDescriptor {
@@ -319,8 +311,8 @@ mod tests {
 		let resources = Resources::new(context.device());
 		let source = context.create_image_texture("test/input/cs-gray-7f7f7f.png")?;
 
-		let destination = log_transform(&source)
-			.generate(&context.device(), context.queue(), &resources);
+		let destination =
+			log_transform(&source).generate(&context.device(), context.queue(), &resources);
 
 		context.golden_texture(
 			"engine/process_shape/log_transform",
@@ -337,8 +329,8 @@ mod tests {
 		let resources = Resources::new(context.device());
 		let source = context.create_image_texture("test/input/cs-gray-7f7f7f.png")?;
 
-		let destination = horizontal_scan(&source)
-			.generate(&context.device(), context.queue(), &resources);
+		let destination =
+			horizontal_scan(&source).generate(&context.device(), context.queue(), &resources);
 
 		context.golden_texture(
 			"engine/process_shape/horizontal_scan",

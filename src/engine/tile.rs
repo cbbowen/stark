@@ -516,8 +516,6 @@ mod tests {
 		tiles[2].fill_texture(bytemuck::cast_slice(&[0u8, 64u8, 128u8, 255u8]));
 
 		let device = context.device();
-		let module = shaders::atlas::create_shader_module(device);
-		let layout = shaders::atlas::create_pipeline_layout(device);
 
 		let chart_sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
 			..Default::default()
@@ -530,25 +528,18 @@ mod tests {
 		);
 
 		let texture_format = wgpu::TextureFormat::Rgba8Unorm;
-		let pipeline = render::render_pipeline()
-			.layout(&layout)
-			.vertex(wgpu::VertexState {
-				module: &module,
-				entry_point: shaders::atlas::ENTRY_VS_MAIN,
-				compilation_options: Default::default(),
-				buffers: &[InstanceInput::vertex_buffer_layout(
-					wgpu::VertexStepMode::Instance,
-				)],
-			})
-			.fragment(shaders::atlas::fragment_state(
-				&module,
-				&shaders::atlas::fs_main_entry([Some(wgpu::ColorTargetState {
-					format: texture_format,
-					blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-					write_mask: wgpu::ColorWrites::ALL,
-				})]),
-			))
-			.create(context.device());
+
+		let pipeline = shaders::atlas::Shader::new(device)
+			.pipeline()
+			.vertex_buffer_layouts(&[InstanceInput::vertex_buffer_layout(
+				wgpu::VertexStepMode::Instance,
+			)])
+			.targets([Some(wgpu::ColorTargetState {
+				format: texture_format,
+				blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+				write_mask: wgpu::ColorWrites::ALL,
+			})])
+			.create(device);
 
 		context.render_golden_commands(
 			"engine/tile/draw_tiles",
