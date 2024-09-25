@@ -46,7 +46,7 @@ impl WgpuTestContext {
 		let context = pollster::block_on(WgpuContext::new())?;
 		let device = context.device();
 
-		let copy_transform = shaders::copy_transform::Shader::new(device);
+		let copy_transform = shaders::copy_transform::Shader::new(device.clone());
 
 		let context = Arc::new(context);
 		Ok(Self {
@@ -92,23 +92,25 @@ impl WgpuTestContext {
 			render::BindingBuffer::init_sized(&glam::Mat2::IDENTITY).create(device);
 
 		use shaders::copy_transform::*;
-		let pipeline = Shader::new(device)
-			.pipeline()
-			.vertex_buffer_layouts(&[])
-			.targets([Some(wgpu::ColorTargetState {
-				format: destination.format(),
-				blend: Some(wgpu::BlendState::REPLACE),
-				write_mask: wgpu::ColorWrites::ALL,
-			})])
-			.create(device);
-		let bind_group = bind_groups::BindGroup0::from_bindings(
-			device,
-			bind_groups::BindGroupLayout0 {
-				transform: transform_buffer.as_entire_buffer_binding(),
-				source_texture: &source_view,
-				source_sampler: &sampler,
-			},
-		);
+		let pipeline_layout = Shader::new(device.clone()).pipeline_layout().get();
+		let pipeline = pipeline_layout
+			.vs_main_pipeline()
+			.fragment(FragmentEntry::fs_main {
+				targets: [Some(wgpu::ColorTargetState {
+					format: destination.format(),
+					blend: Some(wgpu::BlendState::REPLACE),
+					write_mask: wgpu::ColorWrites::ALL,
+				})],
+			})
+			.get();
+		let bind_group = pipeline_layout
+			.bind_group_layouts()
+			.0
+			.bind_group()
+			.transform(transform_buffer.as_entire_buffer_binding())
+			.source_texture(&source_view)
+			.source_sampler(&sampler)
+			.create();
 
 		let mut command_encoder = device.create_command_encoder(&Default::default());
 		{

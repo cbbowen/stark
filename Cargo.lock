@@ -3049,7 +3049,6 @@ dependencies = [
 [[package]]
 name = "wgsl_to_wgpu"
 version = "0.10.1"
-source = "git+https://github.com/cbbowen/wgsl_to_wgpu.git#153b286788b3ffdd6b9ecd807aa2b2cda91ba18f"
 dependencies = [
  "case",
  "naga 22.0.0",

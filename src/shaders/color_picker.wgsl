@@ -16,6 +16,8 @@ fn vs_main(
 	var out: VertexOutput;
 	let x = f32(vertex_index & 1u) - 0.5;
 	let y = 0.5 * f32(vertex_index & 2u) - 0.5;
+	// let x = 0.5 * f32((vertex_index + 1) & 2u) - 0.5;
+	// let y = 0.5 * f32(vertex_index & 2u) - 0.5;
 	out.tex_coords = vec2<f32>(x, y);
 	// TODO: Pass this in as a transformation matrix.
 	out.clip_position = vec4<f32>(3.8 * out.tex_coords + vec2(-0.09, 0.24), 0.0, 1.0);

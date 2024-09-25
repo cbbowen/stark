@@ -8,38 +8,6 @@ use leptos::prelude::*;
 use leptos::{component, view, IntoView};
 use std::sync::Arc;
 
-fn create_bind_group(device: &wgpu::Device) -> (bind_groups::BindGroup0, BindingBuffer<f32>) {
-	let buffer = BindingBuffer::init(&0.5f32)
-		.label("drawing_action")
-		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
-		.create(device);
-	let bind_group = bind_groups::BindGroup0::from_bindings(
-		device,
-		bind_groups::BindGroupLayout0 {
-			lightness: buffer.as_entire_buffer_binding(),
-		},
-	);
-	(bind_group, buffer)
-}
-
-fn create_render_pipeline(
-	device: &wgpu::Device,
-	texture_format: wgpu::TextureFormat,
-	shader: &Shader,
-) -> wgpu::RenderPipeline {
-	shader
-		.pipeline()
-		.label("ColorPicker")
-		.vertex_buffer_layouts(&[])
-		.targets([Some(wgpu::ColorTargetState {
-			format: texture_format,
-			blend: Some(wgpu::BlendState::REPLACE),
-			write_mask: wgpu::ColorWrites::ALL,
-		})])
-		.overrides(OverrideConstants { proof: None })
-		.create(device)
-}
-
 #[component]
 pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 	// Create a lens into `color`.
@@ -51,18 +19,39 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 
 	let (texture_format, set_texture_format) = signal(None);
 
+	let pipeline_layout = resources.color_picker.pipeline_layout().get();
 	let render_pipeline = {
-		let context = context.clone();
+		let pipeline_layout = pipeline_layout.clone();
 		create_local_derived(move || {
-			Some(Arc::new(create_render_pipeline(
-				context.device(),
-				texture_format.get()?,
-				&resources.color_picker,
-			)))
+			let pipeline = pipeline_layout
+				.vs_main_pipeline()
+				.primitive(wgpu::PrimitiveState {
+					topology: wgpu::PrimitiveTopology::TriangleStrip,
+					..Default::default()
+				})
+				.fragment(FragmentEntry::fs_main {
+					targets: [Some(wgpu::ColorTargetState {
+						format: texture_format.get()?,
+						blend: Some(wgpu::BlendState::REPLACE),
+						write_mask: wgpu::ColorWrites::ALL,
+					})],
+				})
+				.overrides(OverrideConstants { proof: None })
+				.get();
+			Some(pipeline)
 		})
 	};
 
-	let (bind_group, buffer) = create_bind_group(context.device());
+	let lightness_buffer = BindingBuffer::init(&0.5f32)
+		.label("lightness")
+		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
+		.create(&context.device());
+	let bind_group = pipeline_layout
+		.bind_group_layouts()
+		.0
+		.bind_group()
+		.lightness(lightness_buffer.as_entire_buffer_binding())
+		.create();
 
 	let render = {
 		let context = context.clone();
@@ -73,7 +62,7 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 			let render_pipeline = render_pipeline.get();
 
 			let lightness = lightness.get();
-			buffer.write_sized(context.queue(), lightness as f32);
+			lightness_buffer.write_sized(context.queue(), lightness as f32);
 
 			let callback = move |view: wgpu::TextureView| {
 				let Some(render_pipeline) = render_pipeline.as_ref() else {

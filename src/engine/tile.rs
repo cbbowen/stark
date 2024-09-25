@@ -135,6 +135,8 @@ struct PoolInternal {
 	blocks: StableVec<Block>,
 	free_list: FreeList,
 	texture_layer_descriptor: TextureLayerDescriptor,
+	read_bind_group_layout: read::BindGroupLayout,
+	write_bind_group_layout: write::BindGroupLayout,
 }
 
 impl PoolInternal {
@@ -184,13 +186,12 @@ impl PoolInternal {
 			)
 			.create(device);
 
-		let read_bind_group = read::BindGroup::from_bindings(
-			device,
-			read::BindGroupLayout {
-				tile_texture: &read_texture_view,
-				tile_data: data_buffer.as_entire_buffer_binding(),
-			},
-		);
+		let read_bind_group = self
+			.read_bind_group_layout
+			.bind_group()
+			.tile_texture(&read_texture_view)
+			.tile_data(data_buffer.as_entire_buffer_binding())
+			.create();
 
 		let block = Block {
 			texture,
@@ -224,12 +225,20 @@ impl Pool {
 	}
 
 	pub fn new(context: Arc<WgpuContext>, texture_layer_descriptor: TextureLayerDescriptor) -> Self {
+		let read_bind_group_layout = read::BindGroupLayout::new(
+			context.device().clone(),
+			// TODO: Should this be false given that filtering won't be consistent at tile boudnaries?
+			true,
+		);
+		let write_bind_group_layout = write::BindGroupLayout::new(context.device().clone());
 		Pool {
 			internal: PoolInternal {
 				context,
 				blocks: Default::default(),
 				free_list: Default::default(),
 				texture_layer_descriptor,
+				read_bind_group_layout,
+				write_bind_group_layout,
 			}
 			.into(),
 		}
@@ -264,13 +273,12 @@ impl Tile {
 			.usage(wgpu::BufferUsages::UNIFORM)
 			.create(&pool.context.device());
 
-		let write_bind_group = write::BindGroup::from_bindings(
-			&pool.context.device(),
-			write::BindGroupLayout {
-				tile_data: block.data_buffer.as_entire_buffer_binding(),
-				layer_index: layer_index_buffer.as_entire_buffer_binding(),
-			},
-		);
+		let write_bind_group = pool
+			.write_bind_group_layout
+			.bind_group()
+			.tile_data(block.data_buffer.as_entire_buffer_binding())
+			.layer_index(layer_index_buffer.as_entire_buffer_binding())
+			.create();
 
 		let texture_view = block.texture.create_view(&wgpu::TextureViewDescriptor {
 			label: Some("Tile::view"),
@@ -517,29 +525,21 @@ mod tests {
 
 		let device = context.device();
 
-		let chart_sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
-			..Default::default()
-		});
-		let usage_bind_group = shaders::atlas::bind_groups::BindGroup0::from_bindings(
-			device,
-			shaders::atlas::bind_groups::BindGroupLayout0 {
-				chart_sampler: &chart_sampler,
-			},
-		);
-
 		let texture_format = wgpu::TextureFormat::Rgba8Unorm;
 
-		let pipeline = shaders::atlas::Shader::new(device)
-			.pipeline()
-			.vertex_buffer_layouts(&[InstanceInput::vertex_buffer_layout(
-				wgpu::VertexStepMode::Instance,
-			)])
-			.targets([Some(wgpu::ColorTargetState {
+		use shaders::atlas::*;
+		let pipeline_layout = Shader::new(device.clone()).pipeline_layout().get();
+		let pipeline = pipeline_layout.vs_main_pipeline(wgpu::VertexStepMode::Instance)
+			.fragment(FragmentEntry::fs_main { targets: [Some(wgpu::ColorTargetState {
 				format: texture_format,
 				blend: Some(wgpu::BlendState::ALPHA_BLENDING),
 				write_mask: wgpu::ColorWrites::ALL,
-			})])
-			.create(device);
+			})]}).get();
+
+		let chart_sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
+			..Default::default()
+		});
+		let usage_bind_group = pipeline_layout.bind_group_layouts().0.bind_group().chart_sampler(&chart_sampler).create();
 
 		context.render_golden_commands(
 			"engine/tile/draw_tiles",

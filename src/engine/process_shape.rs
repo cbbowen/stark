@@ -1,7 +1,7 @@
 use core::f32;
 
-use crate::shaders::{copy_transform, horizontal_scan, log_transform};
 use crate::render::*;
+use crate::shaders::{copy_transform, horizontal_scan, log_transform};
 use bon::builder;
 use glam::*;
 use thiserror::Error;
@@ -46,16 +46,25 @@ pub fn rotations(
 		.create(device);
 
 	let copy_transform_shader = &resources.copy_transform;
-	let copy_transform_pipeline = copy_transform_shader
-		.pipeline()
-		.label("generate_rotations::copy_transform")
-		.vertex_buffer_layouts(&[])
-		.targets([Some(wgpu::ColorTargetState {
-			format,
-			blend: Some(wgpu::BlendState::REPLACE),
-			write_mask: wgpu::ColorWrites::ALL,
-		})])
-		.create(device);
+	let copy_transform_pipeline_layout = copy_transform_shader
+		.pipeline_layout()
+		.source_texture_filterable(true)
+		.source_sampler_filtering(wgpu::SamplerBindingType::Filtering)
+		.get();
+	let copy_transform_pipeline = copy_transform_pipeline_layout
+		.vs_main_pipeline()
+		.primitive(wgpu::PrimitiveState {
+			topology: wgpu::PrimitiveTopology::TriangleStrip,
+			..Default::default()
+		})
+		.fragment(copy_transform::FragmentEntry::fs_main {
+			targets: [Some(wgpu::ColorTargetState {
+				format,
+				blend: Some(wgpu::BlendState::REPLACE),
+				write_mask: wgpu::ColorWrites::ALL,
+			})],
+		})
+		.get();
 
 	let source_view = source.create_view(&wgpu::TextureViewDescriptor {
 		label: Some("generate_rotations::source_view"),
@@ -91,14 +100,14 @@ pub fn rotations(
 		))
 		.create(device);
 
-		let bind_group = copy_transform::bind_groups::BindGroup0::from_bindings(
-			device,
-			copy_transform::bind_groups::BindGroupLayout0 {
-				transform: transform_buffer.as_entire_buffer_binding(),
-				source_texture: &source_view,
-				source_sampler: &source_sampler,
-			},
-		);
+		let bind_group = copy_transform_pipeline_layout
+			.bind_group_layouts()
+			.0
+			.bind_group()
+			.transform(transform_buffer.as_entire_buffer_binding())
+			.source_texture(&source_view)
+			.source_sampler(&source_sampler)
+			.create();
 
 		let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 			color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -143,14 +152,8 @@ pub fn log_transform(
 		.create(device);
 
 	let shader = &resources.log_transform;
-	let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-		label: Some("log_transform"),
-		layout: Some(&shader.layout),
-		module: &shader.module,
-		entry_point: "log_transform",
-		compilation_options: Default::default(),
-		cache: None,
-	});
+	let pipeline_layout = shader.pipeline_layout().source_filterable(false).get();
+	let pipeline = pipeline_layout.log_transform_pipeline().get();
 
 	let source_view = source.create_view(&wgpu::TextureViewDescriptor {
 		label: Some("log_transform::source"),
@@ -165,13 +168,13 @@ pub fn log_transform(
 		..Default::default()
 	});
 
-	let bind_group = bind_groups::BindGroup0::from_bindings(
-		device,
-		bind_groups::BindGroupLayout0 {
-			source: &source_view,
-			destination: &destination_view,
-		},
-	);
+	let bind_group = pipeline_layout
+		.bind_group_layouts()
+		.0
+		.bind_group()
+		.source(&source_view)
+		.destination(&destination_view)
+		.create();
 
 	let mut command_encoder = device.create_command_encoder(&Default::default());
 	{
@@ -182,7 +185,7 @@ pub fn log_transform(
 		let x_workgroups = (source.width() + WORKGROUP_WIDTH - 1) / WORKGROUP_WIDTH;
 		let y_workgroups = (source.height() + WORKGROUP_HEIGHT - 1) / WORKGROUP_HEIGHT;
 		pass.set_pipeline(&pipeline);
-		bind_group.set(&mut pass);
+		bind_group.set_compute(&mut pass);
 		pass.dispatch_workgroups(x_workgroups, y_workgroups, 1);
 	}
 	queue.submit([command_encoder.finish()]);
@@ -213,14 +216,8 @@ pub fn horizontal_scan(
 		.create(device);
 
 	let shader = &resources.horizontal_scan;
-	let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-		label: Some("horizontal_scan"),
-		layout: Some(&shader.layout),
-		module: &shader.module,
-		entry_point: "horizontal_scan",
-		compilation_options: Default::default(),
-		cache: None,
-	});
+	let pipeline_layout = shader.pipeline_layout().source_filterable(false).get();
+	let pipeline = pipeline_layout.horizontal_scan_pipeline().get();
 
 	let source_view = source.create_view(&wgpu::TextureViewDescriptor {
 		label: Some("horizontal_scan::source"),
@@ -235,13 +232,13 @@ pub fn horizontal_scan(
 		..Default::default()
 	});
 
-	let bind_group = bind_groups::BindGroup0::from_bindings(
-		device,
-		bind_groups::BindGroupLayout0 {
-			source: &source_view,
-			destination: &destination_view,
-		},
-	);
+	let bind_group = pipeline_layout
+		.bind_group_layouts()
+		.0
+		.bind_group()
+		.source(&source_view)
+		.destination(&destination_view)
+		.create();
 
 	let mut command_encoder = device.create_command_encoder(&Default::default());
 	{
@@ -251,7 +248,7 @@ pub fn horizontal_scan(
 		});
 		let num_workgroups = (source.height() + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
 		pass.set_pipeline(&pipeline);
-		bind_group.set(&mut pass);
+		bind_group.set_compute(&mut pass);
 		pass.dispatch_workgroups(num_workgroups, 1, 1);
 	}
 	queue.submit([command_encoder.finish()]);

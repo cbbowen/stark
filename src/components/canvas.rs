@@ -6,39 +6,13 @@ use engine::*;
 use glam::*;
 use leptos::prelude::*;
 use leptos_use::{use_element_size, UseElementSizeReturn};
-use shaders::canvas::*;
 use std::sync::{Arc, RwLock};
 use util::CoordinateSource;
 use util::LocalCallback;
 use util::PointerCapture;
 use util::SetExt;
-use wgpu::VertexBufferLayout;
 
 const MULTISAMPLE_COUNT: u32 = 4;
-
-fn canvas_render_pipeline<'a>(
-	device: &wgpu::Device,
-	texture_format: wgpu::TextureFormat,
-	// TODO: Change the API and use this.
-	buffer_layouts: &[VertexBufferLayout<'a>; 1],
-	shader: &Shader,
-) -> wgpu::RenderPipeline {
-	shader
-		.pipeline()
-		.label("Canvas")
-		.vertex_buffer_layouts(buffer_layouts)
-		.targets([Some(wgpu::ColorTargetState {
-			format: texture_format,
-			// TODO: We will probably need to change this to support layers.
-			blend: Some(wgpu::BlendState::REPLACE),
-			write_mask: wgpu::ColorWrites::ALL,
-		})])
-		.multisample(wgpu::MultisampleState {
-			count: MULTISAMPLE_COUNT,
-			..Default::default()
-		})
-		.create(device)
-}
 
 fn create_canvas_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 	device.create_sampler(&wgpu::SamplerDescriptor {
@@ -52,32 +26,6 @@ fn create_canvas_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 	})
 }
 
-fn create_canvas_bind_group(
-	device: &wgpu::Device,
-	sampler: &wgpu::Sampler,
-) -> (
-	shaders::canvas::bind_groups::BindGroup0,
-	BindingBuffer<Mat4>,
-) {
-	use shaders::canvas::bind_groups::*;
-
-	let canvas_to_view_buffer = BindingBuffer::init(&Mat4::ZERO)
-		.label("canvas_to_view")
-		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
-		.create(device);
-
-	(
-		BindGroup0::from_bindings(
-			device,
-			BindGroupLayout0 {
-				chart_sampler: sampler,
-				canvas_to_view: canvas_to_view_buffer.as_entire_buffer_binding(),
-			},
-		),
-		canvas_to_view_buffer,
-	)
-}
-
 #[component]
 pub fn Canvas(
 	#[prop(into)] brush_color: Signal<Vec3>,
@@ -86,6 +34,7 @@ pub fn Canvas(
 	#[prop(into)] brush_opacity: Signal<f64>,
 ) -> impl IntoView {
 	let context: Arc<WgpuContext> = use_context().unwrap();
+	let device = context.device();
 	let resources: Arc<render::Resources> = use_context().unwrap();
 
 	let node_ref = NodeRef::new();
@@ -93,13 +42,25 @@ pub fn Canvas(
 
 	let canvas_texture_format = wgpu::TextureFormat::Rgba16Float;
 	let atlas = Atlas::new(context.clone(), canvas_texture_format);
-
 	let atlas_buffer_layout = atlas.buffer_layout();
 	let atlas = Arc::new(RwLock::new(atlas));
 
-	let canvas_sampler = create_canvas_sampler(context.device());
-	let (canvas_bind_group, canvas_to_view_buffer) =
-		create_canvas_bind_group(context.device(), &canvas_sampler);
+	let canvas_pipeline_layout = resources
+		.canvas
+		.pipeline_layout()
+		.get();
+	let canvas_sampler = create_canvas_sampler(&device);
+	let canvas_to_view_buffer = BindingBuffer::init(&Mat4::ZERO)
+		.label("canvas_to_view")
+		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
+		.create(&device);
+	let canvas_bind_group = canvas_pipeline_layout
+		.bind_group_layouts()
+		.0
+		.bind_group()
+		.chart_sampler(&canvas_sampler)
+		.canvas_to_view(canvas_to_view_buffer.as_entire_buffer_binding())
+		.create();
 
 	let (surface_configuration, set_surface_configuration) =
 		signal_local::<Option<wgpu::SurfaceConfiguration>>(None);
@@ -109,15 +70,29 @@ pub fn Canvas(
 
 	let render_pipeline = {
 		let device = context.device().clone();
-		let resources = resources.clone();
+		let canvas_pipeline_layout = canvas_pipeline_layout.clone();
 		let vertex_buffer_layouts = [atlas_buffer_layout];
 		create_local_derived(move || {
-			Some(Arc::new(canvas_render_pipeline(
-				&device,
-				surface_texture_format.get()?,
-				&vertex_buffer_layouts,
-				&resources.canvas,
-			)))
+			let pipeline = canvas_pipeline_layout
+				.vs_main_pipeline(wgpu::VertexStepMode::Instance)
+				.primitive(wgpu::PrimitiveState {
+					topology: wgpu::PrimitiveTopology::TriangleStrip,
+					..Default::default()
+				})
+				.fragment(shaders::canvas::FragmentEntry::fs_main {
+					targets: [Some(wgpu::ColorTargetState {
+						format: surface_texture_format.get()?,
+						// TODO: We will probably need to change this to support layers.
+						blend: Some(wgpu::BlendState::REPLACE),
+						write_mask: wgpu::ColorWrites::ALL,
+					})],
+				})
+				.multisample(wgpu::MultisampleState {
+					count: MULTISAMPLE_COUNT,
+					..Default::default()
+				})
+				.get();
+			Some(Arc::new(pipeline))
 		})
 	};
 

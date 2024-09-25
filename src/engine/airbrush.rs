@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::engine::atlas;
 use crate::render::{BindingBuffer, Resources};
-use crate::shaders::airbrush::*;
+use crate::shaders::{self, airbrush::*};
 use crate::util::PiecewiseLinear;
 use glam::{vec2, Vec2};
 use itertools::Itertools;
@@ -10,7 +12,7 @@ use super::embedded_shapes;
 
 fn create_vertex_buffer(
 	device: &wgpu::Device,
-) -> (wgpu::VertexBufferLayout<'static>, wgpu::Buffer) {
+) -> wgpu::Buffer {
 	let layout = VertexInput::vertex_buffer_layout(wgpu::VertexStepMode::Vertex);
 	let buffer = device.create_buffer(&wgpu::BufferDescriptor {
 		label: Some("airbrush::create_vertex_buffer"),
@@ -18,46 +20,7 @@ fn create_vertex_buffer(
 		usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
 		mapped_at_creation: false,
 	});
-	(layout, buffer)
-}
-
-fn create_pipeline(
-	device: &wgpu::Device,
-	texture_format: wgpu::TextureFormat,
-	shader: &Shader,
-	vertex_buffer_layout: wgpu::VertexBufferLayout<'_>,
-) -> wgpu::RenderPipeline {
-	shader
-		.pipeline()
-		.label("airbrush")
-		.vertex_buffer_layouts(&[vertex_buffer_layout])
-		.targets([Some(wgpu::ColorTargetState {
-			format: texture_format,
-			blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-			write_mask: wgpu::ColorWrites::ALL,
-		})])
-		.create(device)
-}
-
-fn create_bind_group(
-	device: &wgpu::Device,
-	shape_texture: &wgpu::TextureView,
-	shape_sampler: &wgpu::Sampler,
-) -> (bind_groups::BindGroup0, BindingBuffer<AirbrushAction>) {
-	use bind_groups::*;
-	let buffer = BindingBuffer::new_sized()
-		.label("airbrush")
-		.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
-		.create(device);
-	let bind_group = BindGroup0::from_bindings(
-		device,
-		BindGroupLayout0 {
-			action: buffer.as_entire_buffer_binding(),
-			shape_texture: shape_texture,
-			shape_sampler: shape_sampler,
-		},
-	);
-	(bind_group, buffer)
+	buffer
 }
 
 pub fn preprocess_shape_row(
@@ -175,8 +138,8 @@ pub struct InputPoint {
 }
 
 pub struct Airbrush {
-	pipeline: wgpu::RenderPipeline,
-	bind_group: bind_groups::BindGroup0,
+	pipeline: Arc<wgpu::RenderPipeline>,
+	bind_group: shaders::airbrush::BindGroup0,
 	action_buffer: BindingBuffer<AirbrushAction>,
 	vertex_buffer: wgpu::Buffer,
 	last_point: Option<InputPoint>,
@@ -195,16 +158,32 @@ impl Airbrush {
 		resources: &Resources,
 		texture_format: wgpu::TextureFormat,
 	) -> Self {
-		let (vertex_buffer_layout, vertex_buffer) = create_vertex_buffer(device);
-		let pipeline = create_pipeline(
-			device,
-			texture_format,
-			&resources.airbrush,
-			vertex_buffer_layout,
-		);
+		let pipeline_layout = resources.airbrush.pipeline_layout().shape_texture_filterable(true).shape_sampler_filtering(wgpu::SamplerBindingType::Filtering).get();
+		let pipeline = pipeline_layout.
+			vs_main_pipeline(wgpu::VertexStepMode::Vertex)
+			.primitive(wgpu::PrimitiveState {
+				topology: wgpu::PrimitiveTopology::TriangleStrip,
+				..Default::default()
+			}).
+			fragment(FragmentEntry::fs_main {
+				targets: [Some(wgpu::ColorTargetState {
+					format: texture_format,
+					blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+					write_mask: wgpu::ColorWrites::ALL,
+				})]}).
+			get();
+
+		let vertex_buffer = create_vertex_buffer(device);
+
 		let shape_texture = create_shape_texture(device, queue);
 		let shape_sampler = create_shape_sampler(device);
-		let (bind_group, action_buffer) = create_bind_group(device, &shape_texture, &shape_sampler);
+		
+		let action_buffer = BindingBuffer::new_sized()
+			.label("airbrush")
+			.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
+			.create(device);
+		let bind_group = pipeline_layout.bind_group_layouts().0.bind_group().action(action_buffer.as_entire_buffer_binding()).shape_texture(&shape_texture).shape_sampler(&shape_sampler).create();
+
 		Self {
 			pipeline,
 			bind_group,
@@ -396,13 +375,9 @@ mod tests {
 		};
 		let tile_data_buffer = BindingBuffer::init_sized(&tile_data).create(device);
 		let layer_index_buffer = BindingBuffer::init_sized(&0u32).create(device);
-		let tile_data_bind_group = bind_groups::BindGroup1::from_bindings(
-			device,
-			bind_groups::BindGroupLayout1 {
-				tile_data: tile_data_buffer.as_entire_buffer_binding(),
-				layer_index: layer_index_buffer.as_entire_buffer_binding(),
-			},
-		);
+		let tile_data_bind_group = BindGroupLayout1::new(device.clone()).bind_group().tile_data(tile_data_buffer.as_entire_buffer_binding()).layer_index(
+				layer_index_buffer.as_entire_buffer_binding(),
+		).create();
 
 		airbrush.start();
 
