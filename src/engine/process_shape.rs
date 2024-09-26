@@ -1,7 +1,9 @@
 use core::f32;
 
 use crate::render::*;
-use crate::shaders::{copy_transform, horizontal_scan, log_transform};
+use crate::shaders::{
+	copy_transform, depth_to_layers, horizontal_scan, layers_to_depth, log_transform,
+};
 use bon::builder;
 use glam::*;
 use thiserror::Error;
@@ -199,7 +201,6 @@ pub fn horizontal_scan(
 	#[builder(finish_fn)] device: &wgpu::Device,
 	#[builder(finish_fn)] queue: &wgpu::Queue,
 	#[builder(finish_fn)] resources: &Resources,
-	#[builder(default)] layer_index: u32,
 	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
 	#[builder(default = &[])] view_formats: &[wgpu::TextureFormat],
 ) -> wgpu::Texture {
@@ -209,6 +210,7 @@ pub fn horizontal_scan(
 		.label("generate_rotations::destination")
 		.width(source.width())
 		.height(source.height())
+		.array_layers(source.depth_or_array_layers())
 		// This must match the format in the the shader.
 		.format(wgpu::TextureFormat::R32Float)
 		.view_formats(view_formats)
@@ -221,14 +223,13 @@ pub fn horizontal_scan(
 
 	let source_view = source.create_view(&wgpu::TextureViewDescriptor {
 		label: Some("horizontal_scan::source"),
-		base_array_layer: layer_index,
-		array_layer_count: Some(1),
-		dimension: Some(wgpu::TextureViewDimension::D2),
+		dimension: Some(wgpu::TextureViewDimension::D2Array),
 		..Default::default()
 	});
 
 	let destination_view = destination.create_view(&wgpu::TextureViewDescriptor {
 		label: Some("horizontal_scan::destination"),
+		dimension: Some(wgpu::TextureViewDimension::D2Array),
 		..Default::default()
 	});
 
@@ -249,7 +250,132 @@ pub fn horizontal_scan(
 		let num_workgroups = (source.height() + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
 		pass.set_pipeline(&pipeline);
 		bind_group.set_compute(&mut pass);
-		pass.dispatch_workgroups(num_workgroups, 1, 1);
+		pass.dispatch_workgroups(num_workgroups, source.depth_or_array_layers(), 1);
+	}
+	queue.submit([command_encoder.finish()]);
+
+	destination
+}
+
+#[builder(finish_fn = convert)]
+pub fn layers_to_depth(
+	#[builder(start_fn)] source: &wgpu::Texture,
+	#[builder(finish_fn)] device: &wgpu::Device,
+	#[builder(finish_fn)] queue: &wgpu::Queue,
+	#[builder(finish_fn)] resources: &Resources,
+	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
+	#[builder(default = &[])] view_formats: &[wgpu::TextureFormat],
+) -> wgpu::Texture {
+	use layers_to_depth::*;
+
+	let destination = texture()
+		.label("layers_to_depth::destination")
+		.width(source.width())
+		.height(source.height())
+		.depth(source.depth_or_array_layers())
+		// This must match the format in the the shader.
+		.format(wgpu::TextureFormat::R32Float)
+		.view_formats(view_formats)
+		.usage(usage | wgpu::TextureUsages::STORAGE_BINDING)
+		.create(device);
+
+	let shader = &resources.layers_to_depth;
+	let pipeline_layout = shader.pipeline_layout().source_filterable(false).get();
+	let pipeline = pipeline_layout.layers_to_depth_pipeline().get();
+
+	let source_view = source.create_view(&wgpu::TextureViewDescriptor {
+		label: Some("layers_to_depth::source"),
+		dimension: Some(wgpu::TextureViewDimension::D2Array),
+		..Default::default()
+	});
+
+	let destination_view = destination.create_view(&wgpu::TextureViewDescriptor {
+		label: Some("layers_to_depth::destination"),
+		..Default::default()
+	});
+
+	let bind_group = pipeline_layout
+		.bind_group_layouts()
+		.0
+		.bind_group()
+		.source(&source_view)
+		.destination(&destination_view)
+		.create();
+
+	let mut command_encoder = device.create_command_encoder(&Default::default());
+	{
+		let mut pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+			label: Some("layers_to_depth"),
+			..Default::default()
+		});
+		let x_workgroups = (source.width() + WORKGROUP_WIDTH - 1) / WORKGROUP_WIDTH;
+		let y_workgroups = (source.height() + WORKGROUP_HEIGHT - 1) / WORKGROUP_HEIGHT;
+		pass.set_pipeline(&pipeline);
+		bind_group.set_compute(&mut pass);
+		pass.dispatch_workgroups(x_workgroups, y_workgroups, 1);
+	}
+	queue.submit([command_encoder.finish()]);
+
+	destination
+}
+
+#[builder(finish_fn = convert)]
+pub fn depth_to_layers(
+	#[builder(start_fn)] source: &wgpu::Texture,
+	#[builder(finish_fn)] device: &wgpu::Device,
+	#[builder(finish_fn)] queue: &wgpu::Queue,
+	#[builder(finish_fn)] resources: &Resources,
+	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
+	#[builder(default = &[])] view_formats: &[wgpu::TextureFormat],
+) -> wgpu::Texture {
+	use depth_to_layers::*;
+
+	let destination = texture()
+		.label("depth_to_layers::destination")
+		.width(source.width())
+		.height(source.height())
+		.array_layers(source.depth_or_array_layers())
+		// This must match the format in the the shader.
+		.format(wgpu::TextureFormat::R32Float)
+		.view_formats(view_formats)
+		.usage(usage | wgpu::TextureUsages::STORAGE_BINDING)
+		.create(device);
+
+	let shader = &resources.depth_to_layers;
+	let pipeline_layout = shader.pipeline_layout().source_filterable(false).get();
+	let pipeline = pipeline_layout.depth_to_layers_pipeline().get();
+
+	let source_view = source.create_view(&wgpu::TextureViewDescriptor {
+		label: Some("depth_to_layers::source"),
+		dimension: Some(wgpu::TextureViewDimension::D3),
+		..Default::default()
+	});
+
+	let destination_view = destination.create_view(&wgpu::TextureViewDescriptor {
+		label: Some("depth_to_layers::destination"),
+		dimension: Some(wgpu::TextureViewDimension::D2Array),
+		..Default::default()
+	});
+
+	let bind_group = pipeline_layout
+		.bind_group_layouts()
+		.0
+		.bind_group()
+		.source(&source_view)
+		.destination(&destination_view)
+		.create();
+
+	let mut command_encoder = device.create_command_encoder(&Default::default());
+	{
+		let mut pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+			label: Some("depth_to_layers"),
+			..Default::default()
+		});
+		let x_workgroups = (source.width() + WORKGROUP_WIDTH - 1) / WORKGROUP_WIDTH;
+		let y_workgroups = (source.height() + WORKGROUP_HEIGHT - 1) / WORKGROUP_HEIGHT;
+		pass.set_pipeline(&pipeline);
+		bind_group.set_compute(&mut pass);
+		pass.dispatch_workgroups(x_workgroups, y_workgroups, 1);
 	}
 	queue.submit([command_encoder.finish()]);
 
@@ -331,6 +457,29 @@ mod tests {
 
 		context.golden_texture(
 			"engine/process_shape/horizontal_scan",
+			GoldenOptions::default(),
+			&destination,
+			0,
+		)?;
+		Ok(())
+	}
+
+	#[test]
+	fn layers_to_depth_to_layers() -> anyhow::Result<()> {
+		let context = WgpuTestContext::new()?;
+		let resources = Resources::new(context.device());
+		let source = context.create_image_texture("test/input/cs-gray-7f7f7f.png")?;
+
+		let depth = layers_to_depth(&source)
+			.usage(wgpu::TextureUsages::TEXTURE_BINDING)
+			.convert(&context.device(), context.queue(), &resources);
+
+		let destination = depth_to_layers(&depth)
+			.usage(wgpu::TextureUsages::COPY_SRC)
+			.convert(&context.device(), context.queue(), &resources);
+
+		context.golden_texture(
+			"engine/process_shape/layers_to_depth_to_layers",
 			GoldenOptions::default(),
 			&destination,
 			0,

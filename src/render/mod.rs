@@ -6,12 +6,6 @@ pub use resources::*;
 use thiserror::Error;
 use wgpu::util::DeviceExt;
 
-#[derive(Debug)]
-pub struct ComputeShader {
-	pub module: wgpu::ShaderModule,
-	pub layout: wgpu::PipelineLayout,
-}
-
 #[derive(Debug, Error)]
 enum TextureError {
 	#[error("texture cannot have both depth and array layers")]

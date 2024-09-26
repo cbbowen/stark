@@ -16,6 +16,8 @@ shader!(pub mod "color_picker.wgsl" in "src/shaders");
 
 shader!(pub mod "airbrush.wgsl" in "src/shaders");
 
+shader!(pub mod "depth_to_layers.wgsl" in "src/shaders");
+shader!(pub mod "layers_to_depth.wgsl" in "src/shaders");
 shader!(pub mod "log_transform.wgsl" in "src/shaders" where filterable: false);
 shader!(pub mod "horizontal_scan.wgsl" in "src/shaders" where filterable: false);
 
