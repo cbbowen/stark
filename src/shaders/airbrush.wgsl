@@ -19,13 +19,14 @@ struct VertexInput {
 	@location(1) u_bounds: vec2<f32>,
 	@location(2) opacity: f32,
 	@location(3) rate: f32,
+	@location(4) width: f32,
 };
 
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,
-	@location(0) @interpolate(linear) u_bounds: vec2<f32>,
-	@location(1) @interpolate(linear) vw: vec2<f32>,
-	@location(2) @interpolate(linear) rate: f32,
+	@location(0) @interpolate(perspective) u_bounds: vec2<f32>,
+	@location(1) @interpolate(perspective) vw: vec2<f32>,
+	@location(2) @interpolate(perspective) rate: f32,
 
 	// Only used for debugging.
 	@location(3) @interpolate(flat) face_index: f32,
@@ -39,7 +40,7 @@ fn vs_main(
 	 let canvas_position = in.position;
 	 let layer_tile_data = tile_data[layer_index];
 	 let chart_position = (canvas_position - layer_tile_data.chart_to_canvas_translation) / layer_tile_data.chart_to_canvas_scale;
-    out.position = vec4(vec2(2.0, -2.0) * (chart_position - 0.5), 0.0, 1.0);
+    out.position = vec4(vec2(2.0, -2.0) * (chart_position - 0.5), 0.0, 1.0) / in.width;
     out.u_bounds = in.u_bounds;
     out.vw = vec2(f32(in.vertex_index & 1), in.opacity);
 	 out.rate = in.rate;

@@ -283,12 +283,14 @@ impl Airbrush {
 					u_bounds,
 					opacity,
 					rate,
+					width,
 				},
 				VertexInput {
 					position: p + width * normal,
 					u_bounds,
 					opacity,
 					rate,
+					width,
 				},
 			])
 		}
