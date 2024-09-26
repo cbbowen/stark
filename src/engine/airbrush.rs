@@ -382,11 +382,11 @@ mod tests {
 		airbrush.start();
 
 		let input_point = InputPoint {
-			position: vec2(0.3, 0.2),
+			position: vec2(0.3, 0.3),
 			pressure: 0.5f32,
 			color: Vec3::ONE,
-			size: 0.3f32,
-			opacity: 1f32,
+			size: 0.4f32,
+			opacity: 15f32,
 			rate: 1f32,
 		};
 		assert!(airbrush.drag(queue, input_point.clone()).is_none());
@@ -401,6 +401,8 @@ mod tests {
 		context.render_golden_commands(
 			"engine/airbrush/draw",
 			test::GoldenOptions {
+				width: 256,
+				height: 256,
 				texture_format,
 				..Default::default()
 			},
