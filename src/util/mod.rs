@@ -32,7 +32,8 @@ pub use promise::*;
 mod image;
 pub use image::ImageExt;
 
-mod clothoid;
+pub mod clothoid;
+pub mod input_interpolate;
 
 use leptos::wasm_bindgen;
 use leptos::web_sys;

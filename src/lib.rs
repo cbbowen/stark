@@ -3,6 +3,8 @@
 #![feature(maybe_uninit_uninit_array)]
 #![feature(maybe_uninit_array_assume_init)]
 
+#![cfg_attr(test, feature(assert_matches))]
+
 pub(crate) mod util;
 
 mod components;
