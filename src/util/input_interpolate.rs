@@ -112,16 +112,16 @@ impl FixedLengthInterpolator for CubicInterpolator {
 		let mut points = points.into_iter();
 		if let Some(initial) = initial {
 			let t0 = initial.t;
+			let y0 = initial.y;
 			let (t1, y1) = points.find(|&(t, _)| t > t0 + MIN_INTERPOLATION_INTERVAL)?;
 			let (t2, y2) = points.find(|&(t, _)| t > t1 + MIN_INTERPOLATION_INTERVAL)?;
-			CubicSegmentSolver::new(t0, t2)
-				.constrain_eq(t0, initial.y)
-				.constrain_derivative_eq(t0, initial.dy_dt)
+			InitialCubicSegmentSolver::new(t0, y0, initial.dy_dt, t2)
 				.constrain_lt(t1, y1 + 0.5)
 				.constrain_gt(t1, y1 - 0.5)
 				.constrain_lt(t2, y2 + 0.5)
 				.constrain_gt(t2, y2 - 0.5)
 				.solve_smooth()
+				.or_else(|| Some(CubicSegment::linear(t0, y0, t1, y1)))
 		} else {
 			let (t0, y0) = points.next()?;
 			let (t1, y1) = points.find(|&(t, _)| t > t0 + MIN_INTERPOLATION_INTERVAL)?;
@@ -137,6 +137,7 @@ impl FixedLengthInterpolator for CubicInterpolator {
 				.constrain_lt(t3, y3 + 0.5)
 				.constrain_gt(t3, y3 - 0.5)
 				.solve_smooth()
+				.or_else(|| Some(CubicSegment::linear(t0, y0, t1, y1)))
 		}
 	}
 }
@@ -177,6 +178,48 @@ impl<Inner: FixedLengthInterpolator> WindowInterpolator<Inner> {
 			.fit(self.last_point, self.points.iter().copied())?;
 		Some(cubic.restricted(cubic.t0, t1))
 	}
+}
+
+fn solve_qp<const N: usize>(
+	p: &[[f32; N]; N],
+	q: &[f32; N],
+	a: &[[f32; N]],
+	b: &[f32],
+	cones: &[clarabel::solver::SupportedConeT<f32>],
+) -> Option<Vec<f32>> {
+	debug_assert_eq!(a.len(), b.len());
+	use clarabel::algebra::*;
+	use clarabel::solver::*;
+
+	let p = CscMatrix::from(p);
+	let a = CscMatrix::from(a);
+	let settings = DefaultSettings {
+		verbose: false,
+		max_iter: 16,
+		tol_gap_abs: EPSILON,
+		tol_feas: EPSILON,
+		tol_infeas_abs: EPSILON,
+		presolve_enable: false,
+		..Default::default()
+	};
+
+	let mut solver = DefaultSolver::new(&p, q, &a, b, cones, settings);
+	solver.solve();
+	match solver.solution.status {
+		SolverStatus::Solved | SolverStatus::AlmostSolved => {}
+		status @ (SolverStatus::PrimalInfeasible
+		| SolverStatus::DualInfeasible
+		| SolverStatus::AlmostPrimalInfeasible
+		| SolverStatus::AlmostDualInfeasible) => {
+			tracing::error!(?status);
+			None?
+		}
+		status => {
+			tracing::warn!(?status);
+		}
+	};
+
+	Some(solver.solution.x)
 }
 
 pub struct CubicSegmentSolver {
@@ -253,50 +296,85 @@ impl CubicSegmentSolver {
 	}
 
 	pub fn solve_smooth(self) -> Option<CubicSegment> {
-		use clarabel::algebra::*;
-		use clarabel::solver::*;
-
-		let p = CscMatrix::from(&[
+		let p = [
 			[2.0 + EPSILON, -3.0, 0.0, 1.0],
 			[-3.0, 6.0 - EPSILON, -3.0, 0.0],
 			[0.0, -3.0, 6.0 - EPSILON, -3.0],
 			[1.0, 0.0, -3.0, 2.0 + EPSILON],
-		]);
+		];
 		let q = [0.0, 0.0, 0.0, 0.0];
-
-		let a = CscMatrix::from(&self.a);
-		let settings = DefaultSettings {
-			verbose: false,
-			tol_gap_abs: EPSILON,
-			tol_feas: EPSILON,
-			tol_infeas_abs: EPSILON,
-			..Default::default()
-		};
-
-		let mut solver = DefaultSolver::new(&p, &q, &a, &self.b, &self.cones, settings);
-		solver.solve();
-		let solution = solver.solution.x;
-		let cubic = CubicSegment {
+		let solution = solve_qp(&p, &q, &self.a, &self.b, &self.cones)?;
+		Some(CubicSegment {
 			t0: self.t0,
 			t1: self.t1,
 			p: [solution[0], solution[1], solution[2], solution[3]],
-		};
+		})
+	}
+}
 
-		let cubic = match solver.solution.status {
-			SolverStatus::Solved | SolverStatus::AlmostSolved => cubic,
-			status @ (SolverStatus::PrimalInfeasible
-			| SolverStatus::DualInfeasible
-			| SolverStatus::AlmostPrimalInfeasible
-			| SolverStatus::AlmostDualInfeasible) => {
-				tracing::error!(?status);
-				None?
-			}
-			status => {
-				tracing::warn!(?status);
-				cubic
-			}
-		};
-		Some(cubic)
+pub struct InitialCubicSegmentSolver {
+	t0: f32,
+	t1: f32,
+	p0: f32,
+	p1: f32,
+	a: Vec<[f32; 2]>,
+	b: Vec<f32>,
+	cones: Vec<clarabel::solver::SupportedConeT<f32>>,
+}
+
+impl InitialCubicSegmentSolver {
+	pub fn new(t0: f32, y0: f32, dy_dt0: f32, t1: f32) -> Self {
+		Self {
+			t0,
+			t1,
+			p0: y0,
+			p1: y0 + dy_dt0 * (t1 - t0) / 3.0,
+			a: Vec::new(),
+			b: Vec::new(),
+			cones: Vec::new(),
+		}
+	}
+
+	fn constraint_coefficients(&self, t: f32) -> ([f32; 2], f32) {
+		let s = (t - self.t0) / (self.t1 - self.t0);
+		let r = 1.0 - s;
+		let s2 = s * s;
+		let r2 = r * r;
+		(
+			[3.0 * r * s2, s * s2],
+			r2 * (r * self.p0 + 3.0 * s * self.p1),
+		)
+	}
+
+	fn constrain_linear_lt(&mut self, coefficients: [f32; 2], value: f32) {
+		self.a.push(coefficients);
+		self.b.push(value);
+		self
+			.cones
+			.push(clarabel::solver::SupportedConeT::NonnegativeConeT(1));
+	}
+
+	pub fn constrain_lt(mut self, t: f32, y: f32) -> Self {
+		let (coefficients, offset) = self.constraint_coefficients(t);
+		self.constrain_linear_lt(coefficients, y - offset);
+		self
+	}
+
+	pub fn constrain_gt(mut self, t: f32, y: f32) -> Self {
+		let (coefficients, offset) = self.constraint_coefficients(t);
+		self.constrain_linear_lt(coefficients.map(|c| -c), -(y - offset));
+		self
+	}
+
+	pub fn solve_smooth(self) -> Option<CubicSegment> {
+		let p = [[6.0, -3.0], [-3.0, 2.0]];
+		let q = [-3.0 * self.p1, 1.0 * self.p0];
+		let solution = solve_qp(&p, &q, &self.a, &self.b, &self.cones)?;
+		Some(CubicSegment {
+			t0: self.t0,
+			t1: self.t1,
+			p: [self.p0, self.p1, solution[0], solution[1]],
+		})
 	}
 }
 
@@ -309,7 +387,7 @@ mod tests {
 	use std::assert_matches::assert_matches;
 
 	#[test]
-	fn test_cubic_solver() {
+	fn test_cubic_segment_solver() {
 		let cubic = CubicSegmentSolver::new(0.0, 4.0)
 			.constrain_gt(1.0, 2.0)
 			.constrain_lt(3.0, 1.0)
@@ -317,6 +395,23 @@ mod tests {
 			.unwrap();
 		println!("{cubic:?}");
 		assert_eq!(cubic.t0, 0.0);
+		assert_eq!(cubic.t1, 4.0);
+		assert!(cubic.evaluate(1.0).y > 2.0 - EPSILON);
+		assert!(cubic.evaluate(3.0).y < 1.0 + EPSILON);
+	}
+
+	#[test]
+	fn test_initial_cubic_segment_solver() {
+		let cubic = InitialCubicSegmentSolver::new(0.0, 1.0, 1.0, 4.0)
+			.constrain_gt(1.0, 2.0)
+			.constrain_lt(3.0, 1.0)
+			.solve_smooth()
+			.unwrap();
+		println!("{cubic:?}");
+		assert_eq!(cubic.t0, 0.0);
+		assert_eq!(cubic.t1, 4.0);
+		assert_eq!(cubic.evaluate(0.0).y, 1.0);
+		assert_abs_diff_eq!(cubic.evaluate(0.0).dy_dt, 1.0, epsilon = EPSILON);
 		assert!(cubic.evaluate(1.0).y > 2.0 - EPSILON);
 		assert!(cubic.evaluate(3.0).y < 1.0 + EPSILON);
 	}
