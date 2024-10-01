@@ -4,21 +4,21 @@ use crate::util::ResultExt;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct EvaluatedPoint {
-	t: f32,
-	y: f32,
-	dy_dt: f32,
-	d2y_dt2: f32,
+	t: f64,
+	y: f64,
+	dy_dt: f64,
+	d2y_dt2: f64,
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct CubicSegment {
-	t0: f32,
-	t1: f32,
-	p: [f32; 4],
+	t0: f64,
+	t1: f64,
+	p: [f64; 4],
 }
 
 impl CubicSegment {
-	pub fn evaluate(&self, t: f32) -> EvaluatedPoint {
+	pub fn evaluate(&self, t: f64) -> EvaluatedPoint {
 		debug_assert!(t >= self.t0);
 		debug_assert!(t <= self.t1);
 		let w = (self.t1 - self.t0).recip();
@@ -50,7 +50,7 @@ impl CubicSegment {
 		self.evaluate(self.t1)
 	}
 
-	pub fn restricted(self, t0: f32, t1: f32) -> Self {
+	pub fn restricted(self, t0: f64, t1: f64) -> Self {
 		let p0 = self.evaluate(t0);
 		let p1 = self.evaluate(t1);
 		let w = (t1 - t0) / 3.0;
@@ -61,7 +61,7 @@ impl CubicSegment {
 		}
 	}
 
-	pub fn linear(t0: f32, y0: f32, t1: f32, y1: f32) -> Self {
+	pub fn linear(t0: f64, y0: f64, t1: f64, y1: f64) -> Self {
 		Self {
 			t0,
 			t1,
@@ -74,11 +74,11 @@ pub trait FixedLengthInterpolator {
 	fn fit(
 		&self,
 		initial: Option<EvaluatedPoint>,
-		points: impl IntoIterator<Item = (f32, f32)>,
+		points: impl IntoIterator<Item = (f64, f64)>,
 	) -> Option<CubicSegment>;
 }
 
-const MIN_INTERPOLATION_INTERVAL: f32 = 0.125;
+const MIN_INTERPOLATION_INTERVAL: f64 = 0.125;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct LinearInterpolator;
@@ -87,7 +87,7 @@ impl FixedLengthInterpolator for LinearInterpolator {
 	fn fit(
 		&self,
 		initial: Option<EvaluatedPoint>,
-		points: impl IntoIterator<Item = (f32, f32)>,
+		points: impl IntoIterator<Item = (f64, f64)>,
 	) -> Option<CubicSegment> {
 		let mut points = points.into_iter();
 		let (t0, y0) = if let Some(initial) = initial {
@@ -107,7 +107,7 @@ impl FixedLengthInterpolator for CubicInterpolator {
 	fn fit(
 		&self,
 		initial: Option<EvaluatedPoint>,
-		points: impl IntoIterator<Item = (f32, f32)>,
+		points: impl IntoIterator<Item = (f64, f64)>,
 	) -> Option<CubicSegment> {
 		let mut points = points.into_iter();
 		if let Some(initial) = initial {
@@ -146,7 +146,7 @@ impl FixedLengthInterpolator for CubicInterpolator {
 pub struct WindowInterpolator<Inner> {
 	inner: Inner,
 	last_point: Option<EvaluatedPoint>,
-	points: std::collections::VecDeque<(f32, f32)>,
+	points: std::collections::VecDeque<(f64, f64)>,
 }
 
 impl<Inner: FixedLengthInterpolator> WindowInterpolator<Inner> {
@@ -158,7 +158,7 @@ impl<Inner: FixedLengthInterpolator> WindowInterpolator<Inner> {
 		}
 	}
 
-	pub fn add_point(&mut self, point: (f32, f32)) -> Option<CubicSegment> {
+	pub fn add_point(&mut self, point: (f64, f64)) -> Option<CubicSegment> {
 		self.points.push_back(point);
 		let cubic = self
 			.inner
@@ -181,12 +181,12 @@ impl<Inner: FixedLengthInterpolator> WindowInterpolator<Inner> {
 }
 
 fn solve_qp<const N: usize>(
-	p: &[[f32; N]; N],
-	q: &[f32; N],
-	a: &[[f32; N]],
-	b: &[f32],
-	cones: &[clarabel::solver::SupportedConeT<f32>],
-) -> Option<Vec<f32>> {
+	p: &[[f64; N]; N],
+	q: &[f64; N],
+	a: &[[f64; N]],
+	b: &[f64],
+	cones: &[clarabel::solver::SupportedConeT<f64>],
+) -> Option<Vec<f64>> {
 	debug_assert_eq!(a.len(), b.len());
 	use clarabel::algebra::*;
 	use clarabel::solver::*;
@@ -211,11 +211,11 @@ fn solve_qp<const N: usize>(
 		| SolverStatus::DualInfeasible
 		| SolverStatus::AlmostPrimalInfeasible
 		| SolverStatus::AlmostDualInfeasible) => {
-			tracing::error!(?status);
+			tracing::error!(?status, ?a, ?b);
 			None?
 		}
 		status => {
-			tracing::warn!(?status);
+			tracing::warn!(?status, ?p, ?q, ?a, ?b);
 		}
 	};
 
@@ -223,15 +223,15 @@ fn solve_qp<const N: usize>(
 }
 
 pub struct CubicSegmentSolver {
-	t0: f32,
-	t1: f32,
-	a: Vec<[f32; 4]>,
-	b: Vec<f32>,
-	cones: Vec<clarabel::solver::SupportedConeT<f32>>,
+	t0: f64,
+	t1: f64,
+	a: Vec<[f64; 4]>,
+	b: Vec<f64>,
+	cones: Vec<clarabel::solver::SupportedConeT<f64>>,
 }
 
 impl CubicSegmentSolver {
-	pub fn new(t0: f32, t1: f32) -> Self {
+	pub fn new(t0: f64, t1: f64) -> Self {
 		Self {
 			t0,
 			t1,
@@ -241,7 +241,7 @@ impl CubicSegmentSolver {
 		}
 	}
 
-	fn constraint_coefficients(&self, t: f32) -> [f32; 4] {
+	fn constraint_coefficients(&self, t: f64) -> [f64; 4] {
 		let s = (t - self.t0) / (self.t1 - self.t0);
 		let r = 1.0 - s;
 		let s2 = s * s;
@@ -249,7 +249,7 @@ impl CubicSegmentSolver {
 		[r2 * r, 3.0 * r2 * s, 3.0 * r * s2, s * s2]
 	}
 
-	fn derivative_constraint_coefficients(&self, t: f32) -> [f32; 4] {
+	fn derivative_constraint_coefficients(&self, t: f64) -> [f64; 4] {
 		let w = (self.t1 - self.t0).recip();
 		let s = (t - self.t0) * w;
 		let r = 1.0 - s;
@@ -259,7 +259,7 @@ impl CubicSegmentSolver {
 		[-c0, c0 - c1, c1 - c2, c2]
 	}
 
-	fn constrain_linear_lt(&mut self, coefficients: [f32; 4], value: f32) {
+	fn constrain_linear_lt(&mut self, coefficients: [f64; 4], value: f64) {
 		self.a.push(coefficients);
 		self.b.push(value);
 		self
@@ -267,7 +267,7 @@ impl CubicSegmentSolver {
 			.push(clarabel::solver::SupportedConeT::NonnegativeConeT(1));
 	}
 
-	fn constrain_linear_eq(&mut self, coefficients: [f32; 4], value: f32) {
+	fn constrain_linear_eq(&mut self, coefficients: [f64; 4], value: f64) {
 		self.a.push(coefficients);
 		self.b.push(value);
 		self
@@ -275,22 +275,22 @@ impl CubicSegmentSolver {
 			.push(clarabel::solver::SupportedConeT::ZeroConeT(1));
 	}
 
-	pub fn constrain_lt(mut self, t: f32, y: f32) -> Self {
+	pub fn constrain_lt(mut self, t: f64, y: f64) -> Self {
 		self.constrain_linear_lt(self.constraint_coefficients(t), y);
 		self
 	}
 
-	pub fn constrain_gt(mut self, t: f32, y: f32) -> Self {
+	pub fn constrain_gt(mut self, t: f64, y: f64) -> Self {
 		self.constrain_linear_lt(self.constraint_coefficients(t).map(|c| -c), -y);
 		self
 	}
 
-	pub fn constrain_eq(mut self, t: f32, y: f32) -> Self {
+	pub fn constrain_eq(mut self, t: f64, y: f64) -> Self {
 		self.constrain_linear_eq(self.constraint_coefficients(t), y);
 		self
 	}
 
-	pub fn constrain_derivative_eq(mut self, t: f32, dy_dt: f32) -> Self {
+	pub fn constrain_derivative_eq(mut self, t: f64, dy_dt: f64) -> Self {
 		self.constrain_linear_eq(self.derivative_constraint_coefficients(t), dy_dt);
 		self
 	}
@@ -313,40 +313,44 @@ impl CubicSegmentSolver {
 }
 
 pub struct InitialCubicSegmentSolver {
-	t0: f32,
-	t1: f32,
-	p0: f32,
-	p1: f32,
-	a: Vec<[f32; 2]>,
-	b: Vec<f32>,
-	cones: Vec<clarabel::solver::SupportedConeT<f32>>,
+	t0: f64,
+	t1: f64,
+	y0: f64,
+	p0: f64,
+	p1: f64,
+	a: Vec<[f64; 2]>,
+	b: Vec<f64>,
+	cones: Vec<clarabel::solver::SupportedConeT<f64>>,
 }
 
 impl InitialCubicSegmentSolver {
-	pub fn new(t0: f32, y0: f32, dy_dt0: f32, t1: f32) -> Self {
+	pub fn new(t0: f64, y0: f64, dy_dt0: f64, t1: f64) -> Self {
+		// We could go ahead and set this to `y0`, but the problem is better conditioned if we offset by `y0` at the very end.
+		let p0 = 0.0;
 		Self {
 			t0,
 			t1,
-			p0: y0,
-			p1: y0 + dy_dt0 * (t1 - t0) / 3.0,
+			y0,
+			p0,
+			p1: p0 + dy_dt0 * (t1 - t0) / 3.0,
 			a: Vec::new(),
 			b: Vec::new(),
 			cones: Vec::new(),
 		}
 	}
 
-	fn constraint_coefficients(&self, t: f32) -> ([f32; 2], f32) {
+	fn constraint_coefficients(&self, t: f64) -> ([f64; 2], f64) {
 		let s = (t - self.t0) / (self.t1 - self.t0);
 		let r = 1.0 - s;
 		let s2 = s * s;
 		let r2 = r * r;
 		(
 			[3.0 * r * s2, s * s2],
-			r2 * (r * self.p0 + 3.0 * s * self.p1),
+			self.y0 + r2 * (r * self.p0 + 3.0 * s * self.p1),
 		)
 	}
 
-	fn constrain_linear_lt(&mut self, coefficients: [f32; 2], value: f32) {
+	fn constrain_linear_lt(&mut self, coefficients: [f64; 2], value: f64) {
 		self.a.push(coefficients);
 		self.b.push(value);
 		self
@@ -354,13 +358,13 @@ impl InitialCubicSegmentSolver {
 			.push(clarabel::solver::SupportedConeT::NonnegativeConeT(1));
 	}
 
-	pub fn constrain_lt(mut self, t: f32, y: f32) -> Self {
+	pub fn constrain_lt(mut self, t: f64, y: f64) -> Self {
 		let (coefficients, offset) = self.constraint_coefficients(t);
 		self.constrain_linear_lt(coefficients, y - offset);
 		self
 	}
 
-	pub fn constrain_gt(mut self, t: f32, y: f32) -> Self {
+	pub fn constrain_gt(mut self, t: f64, y: f64) -> Self {
 		let (coefficients, offset) = self.constraint_coefficients(t);
 		self.constrain_linear_lt(coefficients.map(|c| -c), -(y - offset));
 		self
@@ -369,16 +373,17 @@ impl InitialCubicSegmentSolver {
 	pub fn solve_smooth(self) -> Option<CubicSegment> {
 		let p = [[6.0, -3.0], [-3.0, 2.0]];
 		let q = [-3.0 * self.p1, 1.0 * self.p0];
+		// We could consider using a different method here because unlike the non-initial version, this problem is strictly convex.
 		let solution = solve_qp(&p, &q, &self.a, &self.b, &self.cones)?;
 		Some(CubicSegment {
 			t0: self.t0,
 			t1: self.t1,
-			p: [self.p0, self.p1, solution[0], solution[1]],
+			p: [self.y0 + self.p0, self.y0 + self.p1, self.y0 + solution[0], self.y0 + solution[1]],
 		})
 	}
 }
 
-const EPSILON: f32 = 1e-2;
+const EPSILON: f64 = 1e-2;
 
 #[cfg(test)]
 mod tests {

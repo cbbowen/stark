@@ -271,7 +271,7 @@ pub fn Canvas(
 			let button2 = e.buttons() & 4 != 0;
 
 			let screen_to_canvas = screen_to_canvas.get_untracked();
-			let x_curve = x_interpolator.add_point((e.time_stamp() as f32 / 1000.0, e.offset_x() as f32));
+			let x_curve = x_interpolator.add_point((e.time_stamp() as f64 / 1000.0, e.offset_x() as f64));
 			// TODO: Add cuves for y and pressure and use them.
 
 			let movement = {

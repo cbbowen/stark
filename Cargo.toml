@@ -96,6 +96,11 @@ debug = [
 [profile.test]
 default = ["debug"]
 
+# Optimize `clarabel` even in `dev` builds.
+# https://doc.rust-lang.org/nightly/cargo/reference/profiles.html#overrides
+[profile.dev.package.clarabel]
+opt-level = 2
+
 [profile.min-size-release]
 inherits = "release"
 opt-level = 'z'
