@@ -260,16 +260,20 @@ pub fn Canvas(
 
 	let pointermove = {
 		let airbrush = airbrush.clone();
-		use crate::util::input_interpolate::*;
-		let mut x_interpolator: WindowInterpolator<CubicInterpolator> = Default::default();
+		let mut input_spline_builder: crate::util::input_interpolate::InputSplineBuilder<crate::util::input_interpolate::CubicInterpolator> = Default::default();
 		move |e: leptos::ev::PointerEvent| {
 			let button0 = e.buttons() & 1 != 0;
 			let button1 = e.buttons() & 2 != 0;
 			let button2 = e.buttons() & 4 != 0;
 
 			let screen_to_canvas = screen_to_canvas.get_untracked();
-			let x_curve =
-				x_interpolator.add_point((e.time_stamp() as f64 / 1000.0, e.offset_x() as f64));
+			let input_curve =
+			input_spline_builder.add_point(crate::util::input_interpolate::InputPoint {
+					t: e.time_stamp() as f32 / 1000.0,
+					x: e.offset_x() as f32,
+					y: e.offset_y() as f32,
+					pressure: e.pressure(),
+				});
 			// TODO: Add cuves for y and pressure and use them.
 
 			let movement = {
