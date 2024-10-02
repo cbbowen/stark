@@ -10,9 +10,7 @@ use wgpu::util::DeviceExt;
 
 use super::embedded_shapes;
 
-fn create_vertex_buffer(
-	device: &wgpu::Device,
-) -> wgpu::Buffer {
+fn create_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {
 	let layout = VertexInput::vertex_buffer_layout(wgpu::VertexStepMode::Vertex);
 	let buffer = device.create_buffer(&wgpu::BufferDescriptor {
 		label: Some("airbrush::create_vertex_buffer"),
@@ -158,31 +156,44 @@ impl Airbrush {
 		resources: &Resources,
 		texture_format: wgpu::TextureFormat,
 	) -> Self {
-		let pipeline_layout = resources.airbrush.pipeline_layout().shape_texture_filterable(true).shape_sampler_filtering(wgpu::SamplerBindingType::Filtering).get();
-		let pipeline = pipeline_layout.
-			vs_main_pipeline(wgpu::VertexStepMode::Vertex)
+		let pipeline_layout = resources
+			.airbrush
+			.pipeline_layout()
+			.shape_texture_filterable(true)
+			.shape_sampler_filtering(wgpu::SamplerBindingType::Filtering)
+			.get();
+		let pipeline = pipeline_layout
+			.vs_main_pipeline(wgpu::VertexStepMode::Vertex)
 			.primitive(wgpu::PrimitiveState {
 				topology: wgpu::PrimitiveTopology::TriangleStrip,
 				..Default::default()
-			}).
-			fragment(FragmentEntry::fs_main {
+			})
+			.fragment(FragmentEntry::fs_main {
 				targets: [Some(wgpu::ColorTargetState {
 					format: texture_format,
 					blend: Some(wgpu::BlendState::ALPHA_BLENDING),
 					write_mask: wgpu::ColorWrites::ALL,
-				})]}).
-			get();
+				})],
+			})
+			.get();
 
 		let vertex_buffer = create_vertex_buffer(device);
 
 		let shape_texture = create_shape_texture(device, queue);
 		let shape_sampler = create_shape_sampler(device);
-		
+
 		let action_buffer = BindingBuffer::new_sized()
 			.label("airbrush")
 			.usage(wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST)
 			.create(device);
-		let bind_group = pipeline_layout.bind_group_layouts().0.bind_group().action(action_buffer.as_entire_buffer_binding()).shape_texture(&shape_texture).shape_sampler(&shape_sampler).create();
+		let bind_group = pipeline_layout
+			.bind_group_layouts()
+			.0
+			.bind_group()
+			.action(action_buffer.as_entire_buffer_binding())
+			.shape_texture(&shape_texture)
+			.shape_sampler(&shape_sampler)
+			.create();
 
 		Self {
 			pipeline,
@@ -377,9 +388,11 @@ mod tests {
 		};
 		let tile_data_buffer = BindingBuffer::init_sized(&tile_data).create(device);
 		let layer_index_buffer = BindingBuffer::init_sized(&0u32).create(device);
-		let tile_data_bind_group = BindGroupLayout1::new(device.clone()).bind_group().tile_data(tile_data_buffer.as_entire_buffer_binding()).layer_index(
-				layer_index_buffer.as_entire_buffer_binding(),
-		).create();
+		let tile_data_bind_group = BindGroupLayout1::new(device.clone())
+			.bind_group()
+			.tile_data(tile_data_buffer.as_entire_buffer_binding())
+			.layer_index(layer_index_buffer.as_entire_buffer_binding())
+			.create();
 
 		airbrush.start();
 

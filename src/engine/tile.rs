@@ -484,7 +484,6 @@ mod tests {
 
 	use glam::*;
 	use itertools::Itertools;
-	use shaders::tile_read::InstanceInput;
 
 	#[test]
 	fn draw_tiles() -> anyhow::Result<()> {
@@ -529,17 +528,26 @@ mod tests {
 
 		use shaders::atlas::*;
 		let pipeline_layout = Shader::new(device.clone()).pipeline_layout().get();
-		let pipeline = pipeline_layout.vs_main_pipeline(wgpu::VertexStepMode::Instance)
-			.fragment(FragmentEntry::fs_main { targets: [Some(wgpu::ColorTargetState {
-				format: texture_format,
-				blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-				write_mask: wgpu::ColorWrites::ALL,
-			})]}).get();
+		let pipeline = pipeline_layout
+			.vs_main_pipeline(wgpu::VertexStepMode::Instance)
+			.fragment(FragmentEntry::fs_main {
+				targets: [Some(wgpu::ColorTargetState {
+					format: texture_format,
+					blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+					write_mask: wgpu::ColorWrites::ALL,
+				})],
+			})
+			.get();
 
 		let chart_sampler = context.device().create_sampler(&wgpu::SamplerDescriptor {
 			..Default::default()
 		});
-		let usage_bind_group = pipeline_layout.bind_group_layouts().0.bind_group().chart_sampler(&chart_sampler).create();
+		let usage_bind_group = pipeline_layout
+			.bind_group_layouts()
+			.0
+			.bind_group()
+			.chart_sampler(&chart_sampler)
+			.create();
 
 		context.render_golden_commands(
 			"engine/tile/draw_tiles",

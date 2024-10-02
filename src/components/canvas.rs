@@ -45,10 +45,7 @@ pub fn Canvas(
 	let atlas_buffer_layout = atlas.buffer_layout();
 	let atlas = Arc::new(RwLock::new(atlas));
 
-	let canvas_pipeline_layout = resources
-		.canvas
-		.pipeline_layout()
-		.get();
+	let canvas_pipeline_layout = resources.canvas.pipeline_layout().get();
 	let canvas_sampler = create_canvas_sampler(&device);
 	let canvas_to_view_buffer = BindingBuffer::init(&Mat4::ZERO)
 		.label("canvas_to_view")
@@ -271,7 +268,8 @@ pub fn Canvas(
 			let button2 = e.buttons() & 4 != 0;
 
 			let screen_to_canvas = screen_to_canvas.get_untracked();
-			let x_curve = x_interpolator.add_point((e.time_stamp() as f64 / 1000.0, e.offset_x() as f64));
+			let x_curve =
+				x_interpolator.add_point((e.time_stamp() as f64 / 1000.0, e.offset_x() as f64));
 			// TODO: Add cuves for y and pressure and use them.
 
 			let movement = {

@@ -5,8 +5,8 @@
 // University of Trento, Italy
 
 use core::f32;
-use std::fmt::Debug;
 use glam::*;
+use std::fmt::Debug;
 
 #[derive(Clone, Copy)]
 pub struct ClothoidState {
@@ -109,8 +109,18 @@ impl Clothoid {
 			// |step * (curvature + step * pinch / 2)| < max_error
 			// step * (curvature + step * pinch / 2) - max_error
 			// step * (curvature + step * pinch / 2) + max_error
-			let max_step = least_positive_quadratic_solution(self.pinch / 2.0, state.curvature, max_error, max_step);
-			let max_step = least_positive_quadratic_solution(self.pinch / 2.0, state.curvature, -max_error, max_step);
+			let max_step = least_positive_quadratic_solution(
+				self.pinch / 2.0,
+				state.curvature,
+				max_error,
+				max_step,
+			);
+			let max_step = least_positive_quadratic_solution(
+				self.pinch / 2.0,
+				state.curvature,
+				-max_error,
+				max_step,
+			);
 			debug_assert!(max_step > 0.0);
 
 			s = (s + max_step).max(s + 1e-2 * max_error).min(self.length);
@@ -376,7 +386,15 @@ mod tests {
 			};
 			let s0 = proof.evaluate(0.0);
 			let s1 = proof.evaluate(proof.length);
-			test_fit_g1_case(s0.position.x, s0.position.y, s0.theta, s1.position.x, s1.position.y, s1.theta, tol);
+			test_fit_g1_case(
+				s0.position.x,
+				s0.position.y,
+				s0.theta,
+				s1.position.x,
+				s1.position.y,
+				s1.theta,
+				tol,
+			);
 		}
 	}
 
@@ -387,8 +405,14 @@ mod tests {
 		let tol = 1e-3;
 		for _ in 0..100 {
 			test_fit_g1_case(
-				0.0, 0.0, f32::consts::TAU * (fastrand::f32() - 0.5), 
-				100.0 * (fastrand::f32() - 0.5), 100.0 * (fastrand::f32() - 0.5), f32::consts::TAU * (fastrand::f32() - 0.5), tol);
+				0.0,
+				0.0,
+				f32::consts::TAU * (fastrand::f32() - 0.5),
+				100.0 * (fastrand::f32() - 0.5),
+				100.0 * (fastrand::f32() - 0.5),
+				f32::consts::TAU * (fastrand::f32() - 0.5),
+				tol,
+			);
 		}
 	}
 

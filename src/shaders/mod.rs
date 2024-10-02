@@ -4,10 +4,10 @@ use wgsl_to_wgpu_macro::shader;
 
 pub mod atlas {
 	super::shader!(mod "atlas.wgsl" in "src/shaders");
-	pub use atlas::Shader;
 	pub use atlas::BindGroup0;
 	pub use atlas::FragmentEntry;
 	pub use atlas::OverrideConstants;
+	pub use atlas::Shader;
 }
 
 shader!(pub mod "canvas.wgsl" in "src/shaders");

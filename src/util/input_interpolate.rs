@@ -1,7 +1,5 @@
 use glam::FloatExt;
 
-use crate::util::ResultExt;
-
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct EvaluatedPoint {
 	t: f64,
@@ -325,7 +323,8 @@ pub struct InitialCubicSegmentSolver {
 
 impl InitialCubicSegmentSolver {
 	pub fn new(t0: f64, y0: f64, dy_dt0: f64, t1: f64) -> Self {
-		// We could go ahead and set this to `y0`, but the problem is better conditioned if we offset by `y0` at the very end.
+		// We could go ahead and set this to `y0`, but the problem is better conditioned if we offset
+		// by `y0` at the very end.
 		let p0 = 0.0;
 		Self {
 			t0,
@@ -373,12 +372,18 @@ impl InitialCubicSegmentSolver {
 	pub fn solve_smooth(self) -> Option<CubicSegment> {
 		let p = [[6.0, -3.0], [-3.0, 2.0]];
 		let q = [-3.0 * self.p1, 1.0 * self.p0];
-		// We could consider using a different method here because unlike the non-initial version, this problem is strictly convex.
+		// We could consider using a different method here because unlike the non-initial version,
+		// this problem is strictly convex.
 		let solution = solve_qp(&p, &q, &self.a, &self.b, &self.cones)?;
 		Some(CubicSegment {
 			t0: self.t0,
 			t1: self.t1,
-			p: [self.y0 + self.p0, self.y0 + self.p1, self.y0 + solution[0], self.y0 + solution[1]],
+			p: [
+				self.y0 + self.p0,
+				self.y0 + self.p1,
+				self.y0 + solution[0],
+				self.y0 + solution[1],
+			],
 		})
 	}
 }
