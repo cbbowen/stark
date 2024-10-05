@@ -47,6 +47,9 @@ canvas_ref.on_load(move |canvas: HtmlElement<html::Canvas>| {
 });
 ```
 
+## Tauri (Planned)
+
+For offline version, we can use Tauri (https://v2.tauri.app). These can be relatively light wrappers that just handle spinning up a Webview and maybe some hooks for native persistance.
 
 ## Alternatives considered
 
