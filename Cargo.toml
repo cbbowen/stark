@@ -50,7 +50,7 @@ zune-image = { version = "0.4", default-features = false, features = [
 ] }
 zune-core = { version = "0.4", default-features = false }
 fresnel = "0.1"
-
+quadrature = "0.1"
 # Used for cubic interpolation. I also tried out `totsu` and `quadprog`, but this was the fastest and most stable.
 clarabel = { version = "0", no-default-features = true, features = ["wasm"] }
 

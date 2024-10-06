@@ -1,5 +1,100 @@
+use itertools::Itertools;
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct TemporalCurve<Y> {
+	points: Vec<BezierPoint<Y>>
+}
+
+impl<Y: VectorSpace> TemporalCurve<Y> {
+	pub fn new(points: Vec<BezierPoint<Y>>) -> Option<Self> {
+		(!points.is_empty()).then_some(TemporalCurve { points })
+	}
+
+	pub fn segments(&self) -> impl Iterator<Item=Bezier<Y>> + '_ {
+		self.points.iter().tuple_windows().map(|(p0, p1)| Bezier::from_endpoints_and_tangents(*p0, *p1))
+	}
+
+	pub fn num_segments(&self) -> usize {
+		self.points.len() - 1
+	}
+
+	fn segment(&self, i: usize) -> Option<Bezier<Y>> {
+		let next_point = self.points.get(i + 1)?;
+		Some(Bezier::from_endpoints_and_tangents(self.points[i], *next_point))
+	}
+
+	pub fn find_segment_containing(&self, t: f32) -> Bezier<Y> {
+		let i  = self.points.partition_point(|p| !(p.t > t));
+		if i == 0 {
+			Bezier::linear_at(*self.points.first().unwrap())
+		} else {
+			self.segment(i - 1).unwrap_or_else(|| Bezier::linear_at(*self.points.last().unwrap()))
+		}
+	}
+
+	pub fn evaluate(&self, t: f32) -> BezierPoint<Y> {
+		self.find_segment_containing(t).evaluate(t)
+	}
+}
+
+pub struct SpatialCurve {
+	temporal: TemporalCurve<glam::Vec2>,
+	distances: Vec<f32>,
+}
+
+// Returns `x` such that the integral of `dy_dx` from 0 to `x` equals `y`.
+fn solve_positive_integral(dy_dx: impl Fn(f64) -> f64, mut y: f64, x_0: f64) -> f64 {
+	const EPS: f64 = 1e-5;
+	let mut a = 0.0;
+	let mut x_i = x_0;
+	for i in 0..50 {
+		let dy_dx_i = dy_dx(x_i) + (-i as f64).exp2();
+		let y_i = quadrature::integrate(&dy_dx, a, x_i, EPS);
+		let delta_y = y_i.integral - y;
+		
+		// This is an optimization, not necessary for correctness.
+		if delta_y < 0.0 {
+			y = -delta_y;
+			a = x_i;
+		}
+
+		x_i -= delta_y / (dy_dx_i + y_i.error_estimate);
+		if delta_y.abs() + y_i.error_estimate <= EPS {
+			break;
+		}
+	}
+	x_i
+}
+
+impl SpatialCurve {
+	pub fn new(temporal: TemporalCurve<glam::Vec2>) -> Self {
+		let eps = 1e-6;
+		let lengths = temporal.segments().map(|s| quadrature::integrate(|t| s.evaluate(t as f32).dy_dt.length() as f64, s.t0 as f64, s.t1 as f64, eps).integral as f32);
+		let distances = lengths.scan(0.0, |d, l| { *d += l; Some(*d) }).collect();
+		Self {
+			temporal,
+			distances
+		}
+	}
+
+	pub fn evaluate(&self, s: f32) -> Option<(glam::Vec2, glam::Vec2)> {
+		if s < 0.0 || s > *self.distances.last().unwrap() {
+			return None;
+		}
+		let i = self.distances.partition_point(move |&s_i| !(s_i > s));
+		let segment = self.temporal.segment(i)?;
+		let prev_distance = if i == 0 { 0.0 } else { self.distances[i - 1] };
+		let next_distance = self.distances[i];
+		let t = (segment.t0 + (segment.t1 - segment.t0) * (0.5 + s - prev_distance) / (1.0 + next_distance - prev_distance)).clamp(segment.t0, segment.t1);
+		let t = solve_positive_integral(|t| segment.evaluate(t as f32).dy_dt.length() as f64, s as f64, t as f64);
+		
+		let temporal = segment.evaluate(t as f32);
+		Some((temporal.y, temporal.dy_dt.normalize()))
+	}
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
-struct BezierPoint<Y> {
+pub struct BezierPoint<Y> {
 	t: f32,
 	y: Y,
 	dy_dt: Y,
@@ -57,7 +152,7 @@ impl<Y: VectorSpace> Bezier<Y> {
 		Self::from_endpoints_and_tangents(p0, p1)
 	}
 
-	pub fn linear(t0: f32, y0: Y, t1: f32, y1: Y) -> Self {
+	pub fn linear_between(t0: f32, y0: Y, t1: f32, y1: Y) -> Self {
 		Self {
 			t0,
 			t1,
@@ -65,9 +160,13 @@ impl<Y: VectorSpace> Bezier<Y> {
 		}
 	}
 
+	pub fn linear_at(p: BezierPoint<Y>) -> Self {
+		Self::linear_between(p.t, p.y, p.t + 1.0, p.y + p.dy_dt)
+	}
+
 	pub fn evaluate(&self, t: f32) -> BezierPoint<Y> {
-		debug_assert!(t >= self.t0);
-		debug_assert!(t <= self.t1);
+		// debug_assert!(t >= self.t0);
+		// debug_assert!(t <= self.t1);
 		let w = (self.t1 - self.t0).recip();
 		let s = (t - self.t0) * w;
 		let q = [
@@ -114,7 +213,7 @@ impl Interpolator for LinearInterpolator {
 			points.next()?
 		};
 		let (t1, y1) = points.next()?;
-		Some(Bezier::linear(t0, y0, t1, y1))
+		Some(Bezier::linear_between(t0, y0, t1, y1))
 	}
 }
 
@@ -139,7 +238,7 @@ impl Interpolator for CubicInterpolator {
 				.constrain_lt(t2, y2 + 0.5)
 				.constrain_gt(t2, y2 - 0.5)
 				.solve_smooth()
-				.or_else(|| Some(Bezier::linear(t0, y0, t1, y1)))
+				.or_else(|| Some(Bezier::linear_between(t0, y0, t1, y1)))
 		} else {
 			let (t0, y0) = points.next()?;
 			let (t1, y1) = points.next()?;
@@ -155,7 +254,7 @@ impl Interpolator for CubicInterpolator {
 				.constrain_lt(t3, y3 + 0.5)
 				.constrain_gt(t3, y3 - 0.5)
 				.solve_smooth()
-				.or_else(|| Some(Bezier::linear(t0, y0, t1, y1)))
+				.or_else(|| Some(Bezier::linear_between(t0, y0, t1, y1)))
 		}
 	}
 }
@@ -798,5 +897,22 @@ mod tests {
 			0.5,
 			epsilon = EPSILON.sqrt()
 		);
+	}
+
+	#[test]
+	fn test_temporal_curve() {
+		let dy_dt = glam::vec2(1.0, 2.0);
+		let temporal = TemporalCurve::new(vec![BezierPoint{ t: 0.0, y: 0.0 * dy_dt, dy_dt}, BezierPoint{ t: 1.0, y: 1.0 * dy_dt, dy_dt}]).unwrap();
+
+		assert_eq!(temporal.evaluate(0.5).y, 0.5 * dy_dt);
+	}
+
+	#[test]
+	fn test_sptial_curve() {
+		let dy_dt = glam::vec2(1.0, 2.0);
+		let temporal = TemporalCurve::new(vec![BezierPoint{ t: 0.0, y: 0.0 * dy_dt, dy_dt}, BezierPoint{ t: 1.0, y: 1.0 * dy_dt, dy_dt}]).unwrap();
+		let spatial = SpatialCurve::new(temporal);
+
+		assert_eq!(spatial.evaluate(0.5).unwrap().0, 0.5 * dy_dt.normalize());
 	}
 }
