@@ -260,7 +260,9 @@ pub fn Canvas(
 
 	let pointermove = {
 		let airbrush = airbrush.clone();
-		let mut input_spline_builder: crate::util::input_interpolate::InputSplineBuilder<crate::util::input_interpolate::CubicInterpolator> = Default::default();
+		let mut input_spline_builder: crate::util::input_interpolate::InputDifferentiator<
+			crate::util::input_interpolate::CubicInterpolator,
+		> = Default::default();
 		move |e: leptos::ev::PointerEvent| {
 			let button0 = e.buttons() & 1 != 0;
 			let button1 = e.buttons() & 2 != 0;
@@ -268,7 +270,7 @@ pub fn Canvas(
 
 			let screen_to_canvas = screen_to_canvas.get_untracked();
 			let input_curve =
-			input_spline_builder.add_point(crate::util::input_interpolate::InputPoint {
+				input_spline_builder.add_point(crate::util::input_interpolate::InputPoint {
 					t: e.time_stamp() as f32 / 1000.0,
 					x: e.offset_x() as f32,
 					y: e.offset_y() as f32,
