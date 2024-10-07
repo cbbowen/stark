@@ -261,7 +261,7 @@ pub fn Canvas(
 	let pointermove = {
 		let airbrush = airbrush.clone();
 		let mut input_spline_builder: crate::util::input_interpolate::InputDifferentiator<
-			crate::util::input_interpolate::CubicInterpolator,
+			crate::util::input_interpolate::CubicBezierFit,
 		> = Default::default();
 		move |e: leptos::ev::PointerEvent| {
 			let button0 = e.buttons() & 1 != 0;

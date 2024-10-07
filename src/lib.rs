@@ -12,6 +12,7 @@ mod geom;
 mod pages;
 mod render;
 pub mod shaders;
+mod trajectory;
 
 mod wgpu_context;
 pub use wgpu_context::*;
