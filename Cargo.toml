@@ -53,13 +53,13 @@ fresnel = "0.1"
 quadrature = "0.1"
 # Used for cubic interpolation. I also tried out `totsu` and `quadprog`, but this was the fastest and most stable.
 clarabel = { version = "0", no-default-features = true, features = ["wasm"] }
+wasm-bindgen = "0.2"
 
 [patch.crates-io]
 # Clarabel on crates.io doesn't compile without the "serde" feature.
 clarabel = { git = "https://github.com/cbbowen/Clarabel.rs.git" }
 
 [dev-dependencies]
-wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3", features = [
 	"HtmlCanvasElement",

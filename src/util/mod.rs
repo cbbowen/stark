@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::Mutex;
 
 use leptos::prelude::*;
@@ -40,9 +41,8 @@ pub mod input_interpolate;
 
 mod bezier;
 
-use leptos::wasm_bindgen;
 use leptos::web_sys;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 use wgpu::Extent3d;
 
 use std::rc::Rc;
@@ -207,6 +207,27 @@ pub trait CoordinateSource {
 	}
 }
 
+#[wasm_bindgen(module = "/src/js/bindings.js")]
+extern "C" {
+	#[wasm_bindgen(js_name = MouseEvent_offset_x)]
+	pub fn offset_x_f64(this: &web_sys::MouseEvent) -> f64;
+
+	#[wasm_bindgen(js_name = MouseEvent_offset_y)]
+	pub fn offset_y_f64(this: &web_sys::MouseEvent) -> f64;
+}
+
+fn try_get_js_f64_property(
+	value: impl AsRef<wasm_bindgen::JsValue>,
+	property: &str,
+) -> Option<f64> {
+	use leptos::web_sys::js_sys::Reflect;
+	use wasm_bindgen::JsValue;
+	let value = value.as_ref();
+	Reflect::get(value, &JsValue::from_str(property))
+		.ok()?
+		.as_f64()
+}
+
 impl CoordinateSource for leptos::ev::PointerEvent {
 	fn size(&self) -> Option<glam::Vec2> {
 		let element = self
@@ -219,7 +240,10 @@ impl CoordinateSource for leptos::ev::PointerEvent {
 	}
 
 	fn pixel_position(&self) -> glam::Vec2 {
-		glam::vec2(self.offset_x() as f32, self.offset_y() as f32)
+		glam::vec2(
+			try_get_js_f64_property(&self, "offsetX").unwrap() as f32,
+			try_get_js_f64_property(&self, "offsetY").unwrap() as f32,
+		)
 	}
 
 	fn pixel_movement(&self) -> glam::Vec2 {
