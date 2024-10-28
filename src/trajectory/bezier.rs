@@ -103,6 +103,20 @@ where
 		];
 		Self::from_control_points(p, t_final)
 	}
+
+	pub fn interpolate_linear(p_initial: X, p_final: X, t_final: f64) -> Self {
+		let tangent = (p_final.clone() - p_initial.clone()) * (1.0 / 3.0);
+		let p1 = p_initial.clone() + tangent.clone();
+		let p2 = p_final.clone() - tangent;
+		Self::from_control_points([p_initial, p1, p2, p_final], t_final)
+	}
+
+	pub fn restricted(&self, t_initial: Duration, duration: Duration) -> Self {
+		let t_final = t_initial + duration;
+		let p_initial = self.evaluate(t_initial);
+		let p_final = self.evaluate(t_final);
+		Self::interpolate(p_initial, p_final, duration.get())
+	}
 }
 
 impl<X> CubicBezier<X> {
@@ -384,8 +398,20 @@ mod tests {
 			.solve_smooth()
 			.unwrap();
 		println!("{cubic:?}");
-		assert_abs_diff_eq!(*cubic.evaluate(0.0.try_into().unwrap()).position(), 0.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(*cubic.evaluate(1.0.try_into().unwrap()).position(), 1.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(*cubic.evaluate(2.0.try_into().unwrap()).position(), 2.0, epsilon=EPSILON);
+		assert_abs_diff_eq!(
+			*cubic.evaluate(0.0.try_into().unwrap()).position(),
+			0.0,
+			epsilon = EPSILON
+		);
+		assert_abs_diff_eq!(
+			*cubic.evaluate(1.0.try_into().unwrap()).position(),
+			1.0,
+			epsilon = EPSILON
+		);
+		assert_abs_diff_eq!(
+			*cubic.evaluate(2.0.try_into().unwrap()).position(),
+			2.0,
+			epsilon = EPSILON
+		);
 	}
 }
