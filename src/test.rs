@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use wgpu::PrimitiveState;
 
 use crate::util::ImageExt;
 use crate::*;
@@ -95,6 +96,10 @@ impl WgpuTestContext {
 		let pipeline_layout = Shader::new(device.clone()).pipeline_layout().get();
 		let pipeline = pipeline_layout
 			.vs_main_pipeline()
+			.primitive(wgpu::PrimitiveState {
+				topology: wgpu::PrimitiveTopology::TriangleStrip,
+				..Default::default()
+			})
 			.fragment(FragmentEntry::fs_main {
 				targets: [Some(wgpu::ColorTargetState {
 					format: destination.format(),
@@ -192,7 +197,9 @@ impl WgpuTestContext {
 
 		if let Ok(mut file) = std::fs::File::create_new(&path) {
 			let data = image.write_to_vec(ImageFormat::PNG)?;
-			file.write_all(&data);
+			if let Err(e) = file.write_all(&data) {
+				tracing::warn!(?e);
+			}
 			return Ok(());
 		}
 

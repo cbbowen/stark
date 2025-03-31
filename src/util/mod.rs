@@ -307,7 +307,7 @@ impl QueueExt for wgpu::Queue {
 		let size = texture.size();
 		let texture_data = pixel_data.repeat((size.width * size.height) as usize);
 		self.write_texture(
-			wgpu::ImageCopyTexture {
+			wgpu::TexelCopyTextureInfo {
 				mip_level: 0,
 				origin: wgpu::Origin3d {
 					z: layer_index,
@@ -317,7 +317,7 @@ impl QueueExt for wgpu::Queue {
 				aspect: wgpu::TextureAspect::All,
 			},
 			&texture_data,
-			wgpu::ImageDataLayout {
+			wgpu::TexelCopyBufferLayout {
 				offset: 0,
 				bytes_per_row: Some(pixel_data.len() as u32 * size.width),
 				rows_per_image: None,
@@ -339,7 +339,7 @@ fn animation_frame_throttle_filter<R>(
 		let last_return_value = last_return_value.clone();
 		let is_available = is_available.clone();
 		if is_available.take() {
-			use leptos::reactive_graph::diagnostics::SpecialNonReactiveZone;
+			use leptos::reactive::diagnostics::SpecialNonReactiveZone;
 
 			let return_value = {
 				#[cfg(debug_assertions)]

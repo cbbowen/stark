@@ -30,7 +30,7 @@ pub struct WgpuContext {
 impl WgpuContext {
 	#[tracing::instrument(err)]
 	pub async fn new() -> Result<Self, WgpuContextError> {
-		let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+		let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
 			flags: wgpu::InstanceFlags::from_build_config().with_env(),
 			..Default::default()
 		});

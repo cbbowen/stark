@@ -23,7 +23,7 @@ pub fn rotations(
 	source: &wgpu::Texture,
 	#[builder(default)] layer_index: u32,
 	format: Option<wgpu::TextureFormat>,
-	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
+	#[builder(default = DEFAULT_TEXTURE_USAGES)] usage: wgpu::TextureUsages,
 ) -> Result<wgpu::Texture, GenerateRotationsError> {
 	use GenerateRotationsError::*;
 	if source.dimension() != wgpu::TextureDimension::D2 {
@@ -138,7 +138,7 @@ pub fn log_transform(
 	#[builder(finish_fn)] queue: &wgpu::Queue,
 	#[builder(finish_fn)] resources: &Resources,
 	#[builder(default)] layer_index: u32,
-	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
+	#[builder(default = DEFAULT_TEXTURE_USAGES)] usage: wgpu::TextureUsages,
 	#[builder(default = &[])] view_formats: &[wgpu::TextureFormat],
 ) -> wgpu::Texture {
 	use log_transform::*;
@@ -201,7 +201,7 @@ pub fn horizontal_scan(
 	#[builder(finish_fn)] device: &wgpu::Device,
 	#[builder(finish_fn)] queue: &wgpu::Queue,
 	#[builder(finish_fn)] resources: &Resources,
-	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
+	#[builder(default = DEFAULT_TEXTURE_USAGES)] usage: wgpu::TextureUsages,
 	#[builder(default = &[])] view_formats: &[wgpu::TextureFormat],
 ) -> wgpu::Texture {
 	use horizontal_scan::*;
@@ -263,7 +263,7 @@ pub fn layers_to_depth(
 	#[builder(finish_fn)] device: &wgpu::Device,
 	#[builder(finish_fn)] queue: &wgpu::Queue,
 	#[builder(finish_fn)] resources: &Resources,
-	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
+	#[builder(default = DEFAULT_TEXTURE_USAGES)] usage: wgpu::TextureUsages,
 	#[builder(default = &[])] view_formats: &[wgpu::TextureFormat],
 ) -> wgpu::Texture {
 	use layers_to_depth::*;
@@ -325,7 +325,7 @@ pub fn depth_to_layers(
 	#[builder(finish_fn)] device: &wgpu::Device,
 	#[builder(finish_fn)] queue: &wgpu::Queue,
 	#[builder(finish_fn)] resources: &Resources,
-	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
+	#[builder(default = DEFAULT_TEXTURE_USAGES)] usage: wgpu::TextureUsages,
 	#[builder(default = &[])] view_formats: &[wgpu::TextureFormat],
 ) -> wgpu::Texture {
 	use depth_to_layers::*;

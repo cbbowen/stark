@@ -1,3 +1,6 @@
+`trunk serve`
+http://127.0.0.1:8080
+
 # Features
 
 * Beautiful Lab colors, both for picking and blending.
@@ -49,7 +52,12 @@ canvas_ref.on_load(move |canvas: HtmlElement<html::Canvas>| {
 
 ## Tauri (Planned)
 
-For offline version, we can use Tauri (https://v2.tauri.app). These can be relatively light wrappers that just handle spinning up a Webview and maybe some hooks for native persistance.
+For offline version, we can use Tauri (https://v2.tauri.app). These can be relatively light wrappers that just handle spinning up a Webview and maybe some hooks for native persistance. Most of the logic will continue to live client-side.
+
+## wgpu_async (Planned)
+https://docs.rs/wgpu-async/latest/wgpu_async
+
+Improve WASM-native parity (which is really only important for testing), consider making `WgpuContext` a wrapper around `AsyncQueue`.
 
 ## Alternatives considered
 

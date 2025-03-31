@@ -12,7 +12,7 @@ pub struct Promise<Output> {
 
 impl<Output> Promise<Output> {
 	pub fn new() -> (Self, impl FnOnce(Output)) {
-		let state = std::sync::Arc::new(std::sync::Mutex::new(PromiseState {
+		let state = Arc::new(Mutex::new(PromiseState {
 			result: Default::default(),
 			waker: Default::default(),
 		}));
@@ -21,7 +21,7 @@ impl<Output> Promise<Output> {
 			move |result| {
 				let mut state = state.lock().unwrap();
 				state.result = Some(result);
-				state.waker.take().map(&std::task::Waker::wake);
+				state.waker.take().map(&Waker::wake);
 			}
 		};
 		(Promise { state }, callback)
@@ -32,14 +32,14 @@ impl<Output> std::future::Future for Promise<Output> {
 	type Output = Output;
 	fn poll(
 		self: std::pin::Pin<&mut Self>,
-		cx: &mut std::task::Context<'_>,
-	) -> std::task::Poll<Self::Output> {
+		cx: &mut Context<'_>,
+	) -> Poll<Self::Output> {
 		let mut state = self.state.lock().unwrap();
 		if let Some(result) = state.result.take() {
-			std::task::Poll::Ready(result)
+			Poll::Ready(result)
 		} else {
 			state.waker = Some(cx.waker().clone());
-			std::task::Poll::Pending
+			Poll::Pending
 		}
 	}
 }

@@ -6,6 +6,8 @@ pub use resources::*;
 use thiserror::Error;
 use wgpu::util::DeviceExt;
 
+pub const DEFAULT_TEXTURE_USAGES: wgpu::TextureUsages = wgpu::TextureUsages::all().difference(wgpu::TextureUsages::STORAGE_ATOMIC);
+
 #[derive(Debug, Error)]
 enum TextureError {
 	#[error("texture cannot have both depth and array layers")]
@@ -58,7 +60,7 @@ pub fn texture(
 	array_layers: Option<u32>,
 	#[builder(default = 1)] mip_level_count: u32,
 	#[builder(default = 1)] sample_count: u32,
-	#[builder(default = wgpu::TextureUsages::all())] usage: wgpu::TextureUsages,
+	#[builder(default = DEFAULT_TEXTURE_USAGES)] usage: wgpu::TextureUsages,
 	format: wgpu::TextureFormat,
 	#[builder(default = &[])] view_formats: &[wgpu::TextureFormat],
 	with_data: Option<(&wgpu::Queue, &[u8])>,
@@ -159,7 +161,7 @@ where
 	[u8; T::SHADER_SIZE.get() as usize]: Sized,
 {
 	fn sized_value_to_data(value: &T) -> impl Borrow<[u8]> {
-		let data = MaybeUninit::uninit_array::<{ T::SHADER_SIZE.get() as usize }>();
+		let data: [_; T::SHADER_SIZE.get() as usize] = MaybeUninit::uninit().transpose();
 		let mut data = encase::StorageBuffer::new(data);
 		data.write(value).unwrap();
 		let data = data.into_inner();

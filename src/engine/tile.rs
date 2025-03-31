@@ -1,4 +1,4 @@
-use crate::render::BindingBuffer;
+use crate::render::{DEFAULT_TEXTURE_USAGES, BindingBuffer};
 use crate::{
 	shaders::tile_read as read, shaders::tile_write as write, shaders::TileData, util::QueueExt,
 	WgpuContext,
@@ -88,7 +88,7 @@ impl Default for TextureLayerDescriptor {
 			mip_level_count: 1,
 			sample_count: 1,
 			format: wgpu::TextureFormat::Rgba8Unorm,
-			usage: wgpu::TextureUsages::all(),
+			usage: DEFAULT_TEXTURE_USAGES,
 			view_formats: Default::default(),
 		}
 	}
@@ -289,6 +289,7 @@ impl Tile {
 			mip_level_count: Some(texture_descriptor.mip_level_count),
 			base_array_layer: index.layer_index,
 			array_layer_count: Some(1),
+			..wgpu::TextureViewDescriptor::default()
 		});
 
 		Self {
@@ -322,6 +323,7 @@ impl Tile {
 			mip_level_count,
 			base_array_layer: self.index.layer_index,
 			array_layer_count: Some(1),
+			..wgpu::TextureViewDescriptor::default()
 		})
 	}
 
@@ -337,8 +339,8 @@ impl Tile {
 		BindingBuffer::<[TileData]>::raw_offset(self.index.layer_index as u64)
 	}
 
-	fn get_copy_texture(&self) -> wgpu::ImageCopyTexture<'_> {
-		wgpu::ImageCopyTexture {
+	fn get_copy_texture(&self) -> wgpu::TexelCopyTextureInfo<'_> {
+		wgpu::TexelCopyTextureInfo {
 			texture: &self.get_block().texture,
 			mip_level: 0,
 			origin: wgpu::Origin3d {
@@ -530,6 +532,10 @@ mod tests {
 		let pipeline_layout = Shader::new(device.clone()).pipeline_layout().get();
 		let pipeline = pipeline_layout
 			.vs_main_pipeline(wgpu::VertexStepMode::Instance)
+			.primitive(wgpu::PrimitiveState {
+				topology: wgpu::PrimitiveTopology::TriangleStrip,
+				..Default::default()
+			})
 			.fragment(FragmentEntry::fs_main {
 				targets: [Some(wgpu::ColorTargetState {
 					format: texture_format,
