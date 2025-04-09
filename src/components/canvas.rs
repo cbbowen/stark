@@ -208,6 +208,9 @@ pub fn Canvas(
 	);
 	let airbrush = std::rc::Rc::new(std::cell::RefCell::new(airbrush));
 
+	let mut input_spline_builder = crate::util::input_interpolate::InputDifferentiator::new();
+	let input_spline_builder = std::rc::Rc::new(std::cell::RefCell::new(input_spline_builder));
+
 	let draw = {
 		let context = context.clone();
 		let atlas = atlas.clone();
@@ -260,22 +263,21 @@ pub fn Canvas(
 
 	let pointermove = {
 		let airbrush = airbrush.clone();
-		// let mut input_spline_builder: crate::util::input_interpolate::InputDifferentiator<
-		// 	crate::util::input_interpolate::CubicBezierFit,
-		// > = Default::default();
+		let mut input_spline_builder = input_spline_builder.clone();
 		move |e: leptos::ev::PointerEvent| {
 			let button0 = e.buttons() & 1 != 0;
 			let button1 = e.buttons() & 2 != 0;
 			let button2 = e.buttons() & 4 != 0;
 
 			let screen_to_canvas = screen_to_canvas.get_untracked();
-			// let input_curve =
-			// 	input_spline_builder.add_point(crate::util::input_interpolate::InputPoint {
-			// 		t: e.time_stamp() as f32 / 1000.0,
-			// 		x: e.offset_x() as f32,
-			// 		y: e.offset_y() as f32,
-			// 		pressure: e.pressure(),
-			// 	});
+			let input_curve = input_spline_builder.borrow_mut().add_point(
+				crate::util::input_interpolate::InputPoint {
+					t: e.time_stamp() as f64 / 1000.0,
+					x: e.offset_x() as f64,
+					y: e.offset_y() as f64,
+					params: e.pressure() as f64,
+				},
+			);
 
 			let movement = {
 				let screen_movement = e.pixel_movement();
@@ -316,6 +318,13 @@ pub fn Canvas(
 					draw(drawable);
 				}
 			}
+		}
+	};
+
+	let pointerout = {
+		let input_spline_builder = input_spline_builder.clone();
+		move |e: leptos::ev::PointerEvent| {
+			input_spline_builder.borrow_mut().reset();
 		}
 	};
 
@@ -387,6 +396,7 @@ pub fn Canvas(
 				on:pointermove=pointermove
 				on:pointerdown=pointerdown
 				on:pointerup=pointerup
+				on:pointerout=pointerout
 				on:wheel=wheel
 			/>
 		</div>

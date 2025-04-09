@@ -21,7 +21,7 @@ fn coordinate_fit(
 	points: impl IntoIterator<Item = (f64, f64)>,
 	eager: bool,
 ) -> Option<CubicBezier<f64>> {
-	let mut points = points.into_iter();
+	let points = points.into_iter();
 	if let Some((t0, initial)) = initial {
 		let points: Vec<_> = points.take(2).collect();
 		let min_points = if eager { 1 } else { 2 };
@@ -86,7 +86,8 @@ impl InputDifferentiator {
 		self.input_points.iter().map(|p| (p.t, p.y))
 	}
 
-	// Returns a trajectory and a duration along it that is now immutable. The rest of the trajectory is a prediction.
+	// Returns a trajectory and a duration along it that is now immutable. The rest of the trajectory
+	// is a prediction.
 	pub fn add_point(
 		&mut self,
 		point: InputPoint,
@@ -133,8 +134,16 @@ impl InputDifferentiator {
 		Some((trajectory, duration.get()))
 	}
 
-	pub fn finish(self) -> Option<f64> {
-		Some(self.input_points.back()?.t)
+	pub fn reset(&mut self) -> Option<f64> {
+		let t_final = self.finish();
+		self.last_point = None;
+		t_final
+	}
+
+	pub fn finish(&mut self) -> Option<f64> {
+		let t_final = Some(self.input_points.back()?.t);
+		self.input_points.clear();
+		t_final
 	}
 }
 
@@ -183,10 +192,10 @@ mod tests {
 		assert_abs_diff_eq!(t, 1.0);
 		let t = Duration::clamp(t);
 		let p = traj.evaluate(t);
-		assert_abs_diff_eq!(p.position().x, 1.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(p.position().y, 0.0, epsilon=EPSILON);
+		assert_abs_diff_eq!(p.position().x, 1.0, epsilon = EPSILON);
+		assert_abs_diff_eq!(p.position().y, 0.0, epsilon = EPSILON);
 		// The X velocity hasn't quite converged at this point.
-		assert_abs_diff_eq!(p.velocity().y, 0.0, epsilon=EPSILON);
+		assert_abs_diff_eq!(p.velocity().y, 0.0, epsilon = EPSILON);
 
 		let ((traj, _), t) = differentiator
 			.add_point(InputPoint {
@@ -198,10 +207,10 @@ mod tests {
 		assert_abs_diff_eq!(t, 1.0);
 		let t = Duration::clamp(t);
 		let p = traj.evaluate(t);
-		assert_abs_diff_eq!(p.position().x, 2.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(p.position().y, 0.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(p.velocity().x, 1.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(p.velocity().y, 0.0, epsilon=EPSILON);
+		assert_abs_diff_eq!(p.position().x, 2.0, epsilon = EPSILON);
+		assert_abs_diff_eq!(p.position().y, 0.0, epsilon = EPSILON);
+		assert_abs_diff_eq!(p.velocity().x, 1.0, epsilon = EPSILON);
+		assert_abs_diff_eq!(p.velocity().y, 0.0, epsilon = EPSILON);
 
 		let ((traj, _), t) = differentiator
 			.add_point(InputPoint {
@@ -213,9 +222,9 @@ mod tests {
 		assert_abs_diff_eq!(t, 1.0);
 		let t = Duration::clamp(t);
 		let p = traj.evaluate(t);
-		assert_abs_diff_eq!(p.position().x, 3.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(p.position().y, 0.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(p.velocity().x, 1.0, epsilon=EPSILON);
-		assert_abs_diff_eq!(p.velocity().y, 0.0, epsilon=EPSILON);
+		assert_abs_diff_eq!(p.position().x, 3.0, epsilon = EPSILON);
+		assert_abs_diff_eq!(p.position().y, 0.0, epsilon = EPSILON);
+		assert_abs_diff_eq!(p.velocity().x, 1.0, epsilon = EPSILON);
+		assert_abs_diff_eq!(p.velocity().y, 0.0, epsilon = EPSILON);
 	}
 }

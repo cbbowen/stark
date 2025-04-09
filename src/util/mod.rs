@@ -186,7 +186,12 @@ impl PointerCapture for leptos::ev::PointerEvent {
 pub trait CoordinateSource {
 	fn size(&self) -> Option<glam::Vec2>;
 
-	fn pixel_position(&self) -> glam::Vec2;
+	fn pixel_position_f64(&self) -> glam::DVec2;
+
+	fn pixel_position(&self) -> glam::Vec2 {
+		let p = self.pixel_position_f64();
+		glam::vec2(p.x as f32, p.y as f32)
+	}
 
 	fn pixel_movement(&self) -> glam::Vec2;
 
@@ -239,11 +244,8 @@ impl CoordinateSource for leptos::ev::PointerEvent {
 		))
 	}
 
-	fn pixel_position(&self) -> glam::Vec2 {
-		glam::vec2(
-			try_get_js_f64_property(&self, "offsetX").unwrap() as f32,
-			try_get_js_f64_property(&self, "offsetY").unwrap() as f32,
-		)
+	fn pixel_position_f64(&self) -> glam::DVec2 {
+		glam::dvec2(try_get_js_f64_property(&self, "offsetX").unwrap(), try_get_js_f64_property(&self, "offsetY").unwrap())
 	}
 
 	fn pixel_movement(&self) -> glam::Vec2 {
@@ -262,8 +264,8 @@ impl CoordinateSource for leptos::ev::WheelEvent {
 		))
 	}
 
-	fn pixel_position(&self) -> glam::Vec2 {
-		glam::vec2(self.offset_x() as f32, self.offset_y() as f32)
+	fn pixel_position_f64(&self) -> glam::DVec2 {
+		glam::dvec2(self.offset_x() as f64, self.offset_y() as f64)
 	}
 
 	fn pixel_movement(&self) -> glam::Vec2 {
