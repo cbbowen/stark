@@ -212,10 +212,11 @@ impl WgpuTestContext {
 			.map(|(a, b)| (a - b).abs())
 			.collect::<Vec<_>>();
 		let quantile_index = (options.quantile * differences.len() as f32).floor() as usize;
-		assert!(
+		more_asserts::assert_le!(
 			*differences
 				.select_nth_unstable_by(quantile_index, |l, r| l.total_cmp(r))
-				.1 <= options.threshold
+				.1,
+			options.threshold
 		);
 
 		Ok(())

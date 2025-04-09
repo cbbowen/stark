@@ -39,8 +39,6 @@ pub use vector_space::*;
 pub mod clothoid;
 pub mod input_interpolate;
 
-mod bezier;
-
 use leptos::web_sys;
 use wasm_bindgen::prelude::*;
 use wgpu::Extent3d;

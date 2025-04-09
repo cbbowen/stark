@@ -153,7 +153,7 @@ fn solve_qp<const N: usize>(
 	b: &[f64],
 	cones: &[clarabel::solver::SupportedConeT<f64>],
 	epsilon: f64,
-) -> Option<Vec<f64>> {
+) -> Result<Vec<f64>> {
 	debug_assert_eq!(a.len(), b.len());
 	use clarabel::algebra::*;
 	use clarabel::solver::*;
@@ -179,7 +179,7 @@ fn solve_qp<const N: usize>(
 		| SolverStatus::AlmostPrimalInfeasible
 		| SolverStatus::AlmostDualInfeasible) => {
 			tracing::error!(?status, ?a, ?b);
-			None?
+			Err(Error::SolveQPFailed)?
 		}
 		status => {
 			tracing::warn!(?status, ?p, ?q, ?a, ?b);
@@ -192,6 +192,7 @@ fn solve_qp<const N: usize>(
 		.iter()
 		.all(|x| x.is_finite())
 		.then_some(solver.solution.x)
+		.ok_or(Error::SolveQPNotFinite)
 }
 
 pub struct CubicBezierSolver {
@@ -264,7 +265,7 @@ impl CubicBezierSolver {
 		self
 	}
 
-	pub fn solve_smooth(&self) -> Option<CubicBezier<f64>> {
+	pub fn solve_smooth(&self) -> Result<CubicBezier<f64>> {
 		const EPSILON: f64 = 1e-2;
 		let p = [
 			[2.0 + EPSILON, -3.0, 0.0, 1.0],
@@ -274,7 +275,7 @@ impl CubicBezierSolver {
 		];
 		let q = [0.0, 0.0, 0.0, 0.0];
 		let solution = solve_qp(&p, &q, &self.a, &self.b, &self.cones, EPSILON)?;
-		Some(CubicBezier {
+		Ok(CubicBezier {
 			p: [solution[0], solution[1], solution[2], solution[3]],
 			duration_scale: self.duration_scale,
 		})
@@ -333,13 +334,13 @@ impl CubicBezierControlSolver {
 		self
 	}
 
-	pub fn solve_smooth(&self) -> Option<CubicBezier<f64>> {
+	pub fn solve_smooth(&self) -> Result<CubicBezier<f64>> {
 		const EPSILON: f64 = 1e-2;
 		let p = [[6.0, -3.0], [-3.0, 2.0]];
 		let q = [-3.0 * self.p1, 0.0];
 		// We could consider using a different method here because this problem is strictly convex.
 		let solution = solve_qp(&p, &q, &self.a, &self.b, &self.cones, EPSILON)?;
-		Some(CubicBezier {
+		Ok(CubicBezier {
 			p: [
 				self.y0,
 				self.y0 + self.p1,

@@ -196,7 +196,7 @@ impl<Y: Interpolable> PiecewiseLinear<Y> {
 		}
 	}
 
-	// This essentially allows composing piecewise functions, but the interface is currently too
+	// This essentially allows convolving piecewise functions, but the interface is currently too
 	// tricky to expose.
 	fn zip_flat_piece_map<Z: Interpolable, V, VIter: Iterator<Item = V>>(
 		&self,

@@ -13,6 +13,10 @@ mod reparameterize;
 pub enum Error {
 	#[error("duration out of range")]
 	DurationOutOfRange,
+	#[error("error solving quadratic program")]
+	SolveQPFailed,
+	#[error("quadratic program had a non-finite solution")]
+	SolveQPNotFinite,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -94,10 +98,17 @@ impl<A: Trajectory, B: Trajectory> Trajectory for (A, B) {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Linear<X> {
 	state: X,
 	velocity: X,
+}
+
+impl<X: Default> Linear<X> {
+	pub fn constant(state: X) -> Self {
+		let velocity = X::default();
+		Linear { state, velocity }
+	}
 }
 
 impl<X> Trajectory for Linear<X>
@@ -296,6 +307,7 @@ impl<X> Cubic<X> {
 	}
 }
 
+/// A spline is a trajectory defined piecewise.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spline<Piece> {
 	// Invariant: non-empty and ordered by duration.
@@ -307,22 +319,6 @@ impl<Piece> Spline<Piece> {
 		Self {
 			pieces: vec![(Duration::default(), piece)],
 		}
-	}
-}
-
-impl<Piece: Trajectory> Spline<Piece> {
-	pub fn add_control(
-		&mut self,
-		time: Duration,
-		control: Piece::Control,
-	) -> Result<(Duration, &Piece)> {
-		let (last_time, last_piece) = self.pieces.last().unwrap();
-		let duration = time.try_sub(*last_time)?;
-		let state = last_piece.evaluate(duration);
-		self
-			.pieces
-			.push((time, Piece::from_state_and_control(state, control)));
-		Ok((duration, &self.pieces.last().unwrap().1))
 	}
 
 	pub fn segments(&self) -> impl Iterator<Item = (&Piece, Duration)> + '_ {
@@ -347,7 +343,31 @@ impl<Piece: Trajectory> Spline<Piece> {
 	}
 
 	pub fn time_to_index(&self, time: Duration) -> usize {
-		self.pieces[1..].partition_point(|(t, _)| t <= &time) - 1
+		self.pieces[1..].partition_point(|(t, _)| t <= &time)
+	}
+
+	pub fn single_piece(self) -> Option<Piece> {
+		(self.pieces.len() == 1).then_some(self.pieces.into_iter().next()?.1)
+	}
+
+	pub fn trim(&mut self, time: Duration) {
+		self.pieces.shrink_to(self.time_to_index(time));
+	}
+}
+
+impl<Piece: Trajectory> Spline<Piece> {
+	pub fn add_control(
+		&mut self,
+		time: Duration,
+		control: Piece::Control,
+	) -> Result<(Duration, &Piece)> {
+		let (last_time, last_piece) = self.pieces.last().unwrap();
+		let duration = time.try_sub(*last_time)?;
+		let state = last_piece.evaluate(duration);
+		self
+			.pieces
+			.push((time, Piece::from_state_and_control(state, control)));
+		Ok((duration, &self.pieces.last().unwrap().1))
 	}
 }
 
@@ -438,5 +458,15 @@ mod tests {
 			p_final.velocity(),
 			epsilon = 1e-8
 		);
+	}
+
+	#[test]
+	fn test_spline() {
+		let mut spline = Spline::new(Linear::constant(1.0));
+		spline.add_control(Duration::clamp(2.0), 1.0).unwrap();
+		spline.add_control(Duration::clamp(4.0), -1.0).unwrap();
+		assert_eq!(spline.evaluate(Duration::clamp(1.0)), 1.0);
+		assert_eq!(spline.evaluate(Duration::clamp(3.0)), 2.0);
+		assert_eq!(spline.evaluate(Duration::clamp(5.0)), 2.0);
 	}
 }
