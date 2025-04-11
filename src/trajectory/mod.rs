@@ -7,12 +7,15 @@ pub use state::{CubicState, QuadraticState};
 mod bezier;
 pub use bezier::*;
 
+mod spline;
+pub use spline::*;
+
 mod reparameterize;
 
 #[derive(Debug, Error)]
 pub enum Error {
 	#[error("duration out of range")]
-	DurationOutOfRange,
+	DurationOutOfRange(f64),
 	#[error("error solving quadratic program")]
 	SolveQPFailed,
 	#[error("quadratic program had a non-finite solution")]
@@ -29,11 +32,13 @@ impl TryFrom<f64> for Duration {
 	fn try_from(value: f64) -> Result<Self> {
 		(value >= 0.0)
 			.then_some(Self(value))
-			.ok_or(Error::DurationOutOfRange)
+			.ok_or(Error::DurationOutOfRange(value))
 	}
 }
 
 impl Duration {
+	pub const ZERO: Duration = Duration(0.0);
+
 	pub fn clamp(value: f64) -> Self {
 		Duration(value.max(0.0))
 	}
@@ -44,6 +49,10 @@ impl Duration {
 
 	pub fn try_sub(self, rhs: Duration) -> Result<Self> {
 		(self.get() - rhs.get()).try_into()
+	}
+
+	pub fn is_zero(&self) -> bool {
+		self.0 == 0.0
 	}
 }
 
@@ -76,6 +85,10 @@ pub trait Trajectory {
 
 	fn control(self) -> Self::Control;
 	fn from_state_and_control(state: Self::State, control: Self::Control) -> Self;
+
+	fn initial_state(&self) -> Self::State {
+		self.evaluate(Duration::ZERO)
+	}
 }
 
 impl<A: Trajectory, B: Trajectory> Trajectory for (A, B) {
@@ -131,6 +144,10 @@ where
 			state,
 			velocity: control,
 		}
+	}
+
+	fn initial_state(&self) -> Self::State {
+		self.state.clone()
 	}
 }
 
@@ -196,6 +213,10 @@ where
 			acceleration: control,
 		}
 	}
+
+	fn initial_state(&self) -> Self::State {
+		self.state.clone()
+	}
 }
 
 impl<X> Quadratic<X> {
@@ -253,6 +274,10 @@ where
 			jerk: control,
 		}
 	}
+
+	fn initial_state(&self) -> Self::State {
+		self.state.clone()
+	}
 }
 
 impl<X> Cubic<X>
@@ -304,104 +329,6 @@ impl<X> Cubic<X> {
 			state: self.state.zip_affine(other.state, f),
 			jerk,
 		}
-	}
-}
-
-/// A spline is a trajectory defined piecewise.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Spline<Piece> {
-	// Invariant: non-empty and ordered by duration.
-	pieces: Vec<(Duration, Piece)>,
-}
-
-impl<Piece> Spline<Piece> {
-	pub fn new(piece: Piece) -> Self {
-		Self {
-			pieces: vec![(Duration::default(), piece)],
-		}
-	}
-
-	pub fn segments(&self) -> impl Iterator<Item = (&Piece, Duration)> + '_ {
-		self
-			.pieces
-			.iter()
-			.scan(Duration::default(), |prev_time, (time, piece)| {
-				let duration = time.try_sub(*prev_time).unwrap();
-				*prev_time = *time;
-				Some((piece, duration))
-			})
-	}
-
-	pub fn get_piece(&self, index: usize) -> Option<&Piece> {
-		let (_, piece) = self.pieces.get(index)?;
-		Some(piece)
-	}
-
-	pub fn get_time(&self, index: usize) -> Option<Duration> {
-		let (duration, _) = self.pieces.get(index)?;
-		Some(duration.clone())
-	}
-
-	pub fn time_to_index(&self, time: Duration) -> usize {
-		self.pieces[1..].partition_point(|(t, _)| t <= &time)
-	}
-
-	pub fn single_piece(self) -> Option<Piece> {
-		(self.pieces.len() == 1).then_some(self.pieces.into_iter().next()?.1)
-	}
-
-	pub fn trim(&mut self, time: Duration) {
-		self.pieces.shrink_to(self.time_to_index(time));
-	}
-}
-
-impl<Piece: Trajectory> Spline<Piece> {
-	pub fn add_control(
-		&mut self,
-		time: Duration,
-		control: Piece::Control,
-	) -> Result<(Duration, &Piece)> {
-		let (last_time, last_piece) = self.pieces.last().unwrap();
-		let duration = time.try_sub(*last_time)?;
-		let state = last_piece.evaluate(duration);
-		self
-			.pieces
-			.push((time, Piece::from_state_and_control(state, control)));
-		Ok((duration, &self.pieces.last().unwrap().1))
-	}
-}
-
-impl<Piece: Trajectory> Trajectory for Spline<Piece> {
-	type State = Piece::State;
-	type Control = Vec<(Duration, Piece::Control)>;
-
-	fn evaluate(&self, duration: Duration) -> Self::State {
-		let index = self.time_to_index(duration);
-		let (time, piece) = &self.pieces[index];
-		let piece_duration = duration.try_sub(*time).unwrap();
-		piece.evaluate(piece_duration)
-	}
-
-	fn control(self) -> Self::Control {
-		self
-			.pieces
-			.into_iter()
-			.map(|(t, p)| (t, p.control()))
-			.collect()
-	}
-
-	fn from_state_and_control(state: Self::State, control: Self::Control) -> Self {
-		let mut pieces = Vec::with_capacity(control.len());
-		control.into_iter().fold(
-			(Duration::default(), state),
-			|(last_time, last_state), (time, control)| {
-				let piece = Piece::from_state_and_control(last_state, control);
-				let state = piece.evaluate(time.try_sub(last_time).unwrap());
-				pieces.push((time, piece));
-				(time, state)
-			},
-		);
-		Self { pieces }
 	}
 }
 
@@ -458,15 +385,5 @@ mod tests {
 			p_final.velocity(),
 			epsilon = 1e-8
 		);
-	}
-
-	#[test]
-	fn test_spline() {
-		let mut spline = Spline::new(Linear::constant(1.0));
-		spline.add_control(Duration::clamp(2.0), 1.0).unwrap();
-		spline.add_control(Duration::clamp(4.0), -1.0).unwrap();
-		assert_eq!(spline.evaluate(Duration::clamp(1.0)), 1.0);
-		assert_eq!(spline.evaluate(Duration::clamp(3.0)), 2.0);
-		assert_eq!(spline.evaluate(Duration::clamp(5.0)), 2.0);
 	}
 }

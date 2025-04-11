@@ -12,14 +12,18 @@ trait Reparameterization<State> {
 #[derive(Clone, Debug)]
 struct ReparameterizedSpline<R, Piece> {
 	spline: Spline<Piece>,
+	// Invariant: `distances.len() == spline.num_pieces()`
 	distances: Vec<Distance>,
 	_reparameterization: PhantomData<R>,
 }
 
-// Returns `x` such that the integral of `dy_dx` from 0 to `x` equals `y`.
+/// Returns `x` such that the integral of `dy_dx` from 0 to `x` equals `y`.
+///
+/// Implementation: Newton's method with bracketing.
 fn solve_positive_integral(dy_dx: impl Fn(f64) -> f64, mut y: f64, x_0: f64) -> f64 {
 	const EPS: f64 = 1e-5;
 	let mut a = 0.0;
+	let mut b = None;
 	let mut x_i = x_0;
 	for i in 0..50 {
 		let dy_dx_i = dy_dx(x_i) + (-i as f64).exp2();
@@ -30,9 +34,15 @@ fn solve_positive_integral(dy_dx: impl Fn(f64) -> f64, mut y: f64, x_0: f64) -> 
 		if delta_y < 0.0 {
 			y = -delta_y;
 			a = x_i;
+		} else {
+			b = Some(x_i);
 		}
 
 		x_i -= delta_y / (dy_dx_i + y_i.error_estimate);
+		if let Some(b) = b {
+			let d = 0.25 * (b - a);
+			x_i = x_i.clamp(a + d, b - d);
+		}
 		if delta_y.abs() + y_i.error_estimate <= EPS {
 			break;
 		}
@@ -43,6 +53,10 @@ fn solve_positive_integral(dy_dx: impl Fn(f64) -> f64, mut y: f64, x_0: f64) -> 
 impl<R, Piece> ReparameterizedSpline<R, Piece> {
 	pub fn into_spline(self) -> Spline<Piece> {
 		self.spline
+	}
+
+	pub fn num_pieces(&self) -> usize {
+		self.spline.num_pieces()
 	}
 }
 
@@ -79,30 +93,42 @@ impl<R: Reparameterization<Piece::State>, Piece: Trajectory> ReparameterizedSpli
 		}
 	}
 
-	pub fn add_control(&mut self, time: Duration, control: Piece::Control) -> Result<()> {
-		let (duration, _) = self.spline.add_control(time, control)?;
-		let piece = self.spline.get_piece(self.distances.len() - 1).unwrap();
+	pub fn set_control_after_time(
+		&mut self,
+		time: Duration,
+		control: Piece::Control,
+	) -> Option<(usize, Duration)> {
+		let Some((index, duration)) = self.spline.set_control_after(time, control) else {
+			self.distances.truncate(self.spline.num_pieces());
+			return None;
+		};
+		self.distances.truncate(index + 1);
+		let piece = self.spline.get_piece(index).unwrap();
 		let length = Self::piece_length(piece, duration);
 		self
 			.distances
 			.push(*self.distances.last().unwrap() + length);
-		Ok(())
+		debug_assert_eq!(self.distances.len(), self.spline.num_pieces());
+		Some((index, length))
 	}
 
 	fn distance_to_piece_index_and_time(&self, distance: Distance) -> (usize, Duration) {
-		let i = self
-			.distances
-			.partition_point(move |&d_i| !(d_i > distance))
-			- 1;
+		let i = self.distances[1..].partition_point(move |&d_i| !(d_i > distance));
 		let piece_distance = self.distances[i];
 		let piece: &Piece = self.spline.get_piece(i).unwrap();
+
+		let distance_on_piece = distance.get() - piece_distance.get();
+
+		// TODO: If we're not on the last piece, we can linearly interpolate to get a better estimate
+		// here.
+		let approximate_time = 0.0;
 
 		(
 			i,
 			Duration::clamp(solve_positive_integral(
 				|t| R::ds_dt(&piece.evaluate(Duration::clamp(t))),
-				distance.get() - piece_distance.get(),
-				0.0,
+				distance_on_piece,
+				approximate_time,
 			)),
 		)
 	}
@@ -151,27 +177,43 @@ mod tests {
 	use super::*;
 	use approx::assert_abs_diff_eq;
 
+	#[derive(Debug)]
+	struct TestReparameterization;
+	impl Reparameterization<QuadraticState<f64>> for TestReparameterization {
+		fn ds_dt(state: &QuadraticState<f64>) -> f64 {
+			state.velocity().abs()
+		}
+		fn scale_domain(state: QuadraticState<f64>, factor: f64) -> QuadraticState<f64> {
+			state.domain_scaled(factor)
+		}
+	}
+
+	#[test]
+	fn test_set_control_after_time() -> anyhow::Result<()> {
+		let mut spline = ReparameterizedSpline::<TestReparameterization, _>::new(
+			Quadratic::from_state_and_control(QuadraticState::new(0.0, 1.0), 0.0),
+		);
+
+		assert_eq!(spline.num_pieces(), 1);
+		spline.set_control_after_time(1.0.try_into()?,0.0);
+		assert_eq!(spline.num_pieces(), 2);
+		spline.set_control_after_time(2.0.try_into()?, 0.0);
+		assert_eq!(spline.num_pieces(), 3);
+		spline.set_control_after_time(1.0.try_into()?, 0.0);
+		assert_eq!(spline.num_pieces(), 2);
+		spline.set_control_after_time(0.0.try_into()?, 0.0);
+		assert_eq!(spline.num_pieces(), 1);
+		
+		Ok(())
+	}
+
 	#[test]
 	fn test_reparameterize_spline() -> anyhow::Result<()> {
-		#[derive(Debug)]
-		struct R;
-
-		impl Reparameterization<QuadraticState<f64>> for R {
-			fn ds_dt(state: &QuadraticState<f64>) -> f64 {
-				state.velocity().abs()
-			}
-
-			fn scale_domain(state: QuadraticState<f64>, factor: f64) -> QuadraticState<f64> {
-				state.domain_scaled(factor)
-			}
-		}
-
-		let mut spline = ReparameterizedSpline::<R, _>::new(Quadratic::from_state_and_control(
-			QuadraticState::new(0.0, 1.0),
-			0.0,
-		));
-		spline.add_control(1.0.try_into()?, 1.0)?;
-		spline.add_control(2.0.try_into()?, -1.0)?;
+		let mut spline = ReparameterizedSpline::<TestReparameterization, _>::new(
+			Quadratic::from_state_and_control(QuadraticState::new(0.0, 1.0), 0.0),
+		);
+		spline.set_control_after_time(1.0.try_into()?, 1.0);
+		spline.set_control_after_time(2.0.try_into()?, -1.0);
 		println!("{spline:?}");
 
 		for x in [0.0, 1.0, 2.0, 3.0] {
