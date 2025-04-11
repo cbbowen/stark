@@ -14,6 +14,8 @@ fn log_transform(
     @builtin(global_invocation_id)
     gid: vec3<u32>,
 ) {
+	const EPSILON: f32 = 0x1p-23f;
+
 	let texture_dimensions = textureDimensions(source);
 	if gid.x >= texture_dimensions.x || gid.y >= texture_dimensions.y {
 		return;
@@ -21,6 +23,6 @@ fn log_transform(
 
 	let input = textureLoad(source, gid.xy, 0).x;
 	// Ideally, we would use `ln_1p(-input)` here.
-	let output = -log(1 - clamp(input, 0.0, 1.0));
+	let output = -log(max(1 - input, EPSILON));
 	textureStore(destination, gid.xy, vec4(output, 0, 0, 1));
 }

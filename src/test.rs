@@ -209,7 +209,7 @@ impl WgpuTestContext {
 			.convert_to_f32_subpixels()
 			.into_iter()
 			.zip_eq(image.convert_to_f32_subpixels())
-			.map(|(a, b)| (a - b).abs())
+			.map(|(a, b)| (a.clamp(0.0, 1.0) - b.clamp(0.0, 1.0)).abs())
 			.collect::<Vec<_>>();
 		let quantile_index = (options.quantile * differences.len() as f32).floor() as usize;
 		more_asserts::assert_le!(
