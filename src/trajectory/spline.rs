@@ -122,11 +122,11 @@ impl<Piece: Trajectory> Trajectory for Spline<Piece> {
 		piece.evaluate(piece_duration)
 	}
 
-	fn control(self) -> Self::Control {
+	fn into_control(self) -> Self::Control {
 		self
 			.pieces
 			.into_iter()
-			.map(|(t, p)| (t, p.control()))
+			.map(|(t, p)| (t, p.into_control()))
 			.collect()
 	}
 
@@ -142,6 +142,37 @@ impl<Piece: Trajectory> Trajectory for Spline<Piece> {
 			},
 		);
 		Self { pieces }
+	}
+
+	fn into_tail(self, time: Duration) -> Self {
+		let (index, duration) = self.time_to_index_and_duration(time);
+		let mut iter = self.pieces.into_iter().skip(index);
+		let head = (Duration::ZERO, iter.next().unwrap().1.into_tail(duration));
+		let mut pieces = vec![head];
+		pieces.extend(iter.map(|(t, p)| (t.try_sub(time).unwrap(), p)));
+		Self { pieces }
+	}
+}
+
+impl<X: Default + Clone + Add<Output = X> + Sub<Output = X> + Mul<f64, Output = X>>
+	Spline<Linear<X>>
+{
+	pub fn interpolate(points: impl IntoIterator<Item = (f64, X)>) -> Option<(f64, Self)> {
+		let mut points = points.into_iter();
+		let (t0, x0) = points.next()?;
+		let mut prev = (Duration::ZERO, x0.clone());
+		let mut spline = Self::new(Linear::constant(x0));
+		while let Some((t, x)) = points.next() {
+			let Ok(d) = (t - t0).try_into() else { continue };
+			let (d_prev, x_prev) = std::mem::replace(&mut prev, (d, x.clone()));
+			let diff = d - d_prev;
+			if diff <= 0.0 {
+				continue;
+			}
+			let control = Linear::interpolate(x_prev, x, diff).into_control();
+			spline.set_control_after(d, control);
+		}
+		Some((t0, spline))
 	}
 }
 
@@ -176,6 +207,21 @@ mod tests {
 		assert_eq!(spline.evaluate(1.0.try_into()?), 1.0);
 		assert_eq!(spline.evaluate(3.0.try_into()?), 2.0);
 		assert_eq!(spline.evaluate(5.0.try_into()?), 2.0);
+		Ok(())
+	}
+
+	#[test]
+	fn test_into_tail() -> anyhow::Result<()> {
+		let mut spline = Spline::new(Linear::constant(1.0));
+		spline.set_control_after(2.0.try_into()?, 1.0);
+		spline.set_control_after(4.0.try_into()?, -1.0);
+		let offset = 3.0.try_into()?;
+		let tail = spline.clone().into_tail(offset);
+
+		let t0 = 0.5.try_into()?;
+		assert_eq!(tail.evaluate(t0), spline.evaluate(offset + t0));
+		let t1 = 1.5.try_into()?;
+		assert_eq!(tail.evaluate(t1), spline.evaluate(offset + t1));
 		Ok(())
 	}
 }

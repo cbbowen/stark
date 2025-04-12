@@ -1,21 +1,16 @@
 use std::collections::VecDeque;
 
-use crate::trajectory::CubicBezier;
-use crate::trajectory::CubicBezierControlSolver;
-use crate::trajectory::CubicBezierSolver;
-use crate::trajectory::Duration;
-use crate::trajectory::Linear;
-use crate::trajectory::QuadraticState;
-use crate::trajectory::Result;
-use crate::trajectory::Trajectory;
+use crate::{trajectory::{
+	CubicBezier, CubicBezierControlSolver, CubicBezierSolver, Duration, Linear, QuadraticState,
+	Result, Spline, Trajectory,
+}, util::ResultExt};
 
-use glam::dvec2;
-use glam::DVec2;
+use glam::{dvec2, DVec2};
 
 type CoordinateTrajectory = CubicBezier<f64>;
 type CoordinateState = <CoordinateTrajectory as Trajectory>::State;
-type PositionTrajectory = CubicBezier<DVec2>;
-type ParamTrajectory = Linear<f64>;
+type PositionPiece = CubicBezier<DVec2>;
+type ParamTrajectory = Spline<Linear<f64>>;
 
 fn coordinate_fit(
 	initial: Option<(f64, CoordinateState)>,
@@ -86,8 +81,8 @@ impl InputDifferentiator {
 		self.input_points.iter().map(|p| (p.t, p.y))
 	}
 
-	fn next_fit(&mut self) -> Option<((PositionTrajectory, ParamTrajectory), Option<f64>)> {
-		let last_point = self.last_point.clone();
+	fn next_fit(&mut self) -> Option<((PositionPiece, ParamTrajectory), f64, Option<Duration>)> {
+		let last_point = self.last_point.take().clone();
 		let x_fit = coordinate_fit(
 			last_point.map(|(t, (position, _))| (t, position.map_affine(|p, _| p.x))),
 			self.x_points(),
@@ -102,44 +97,31 @@ impl InputDifferentiator {
 			self.input_points.pop_front();
 			return None;
 		};
-		let ((x_bezier, x_fit_max_points), (y_bezier, y_fit_max_points)) = (x_fit?, y_fit?);
-		if x_fit_max_points != y_fit_max_points {
-			tracing::error!("{x_fit_max_points} != {y_fit_max_points}");
-			self.reset();
-			return None;
-		}
+		let (x_bezier, fit_max_points) = x_fit?;
+		let (y_bezier, y_fit_max_points) = y_fit?;
+		debug_assert_eq!(y_fit_max_points, fit_max_points);
 
 		let position_trajectory = x_bezier.zip_affine(y_bezier, |x, y, _| dvec2(x, y));
 
-		let (t0, params0) = if let Some((t, state)) = last_point {
-			(t, state.1)
+		let last_params = if let Some(last_point) = last_point {
+			Some((last_point.0, last_point.1.1))
+		} else if fit_max_points {
+			self.input_points.pop_front().map(|p| (p.t, p.params))
 		} else {
-			let p = if x_fit_max_points {
-				self.input_points.pop_front()?
-			} else {
-				self.input_points.front()?.clone()
-			};
-			(p.t, p.params)
+			None
 		};
-		let InputPoint {
-			t: t1,
-			params: params1,
-			..
-		} = if x_fit_max_points {
-			self.input_points.pop_front()?
-		} else {
-			self.input_points.front()?.clone()
-		};
-		let duration: Duration = (t1 - t0).try_into().ok()?;
 
-		// TODO: This is probably not the best way to interpolate params.
-		let param_trajectory = ParamTrajectory::interpolate(params0, params1, duration.get());
+		let input_params = self.input_points.iter().map(|p| (p.t, p.params));
+		let times_and_params = last_params.into_iter().chain(input_params);
+		let (t0, param_trajectory) = ParamTrajectory::interpolate(times_and_params).unwrap();
 
 		let trajectory = (position_trajectory, param_trajectory);
-		if x_fit_max_points {
-			self.last_point = Some((t1, trajectory.evaluate(duration)));
+		let t1 = fit_max_points.then(|| self.input_points.pop_front().unwrap().t);
+		let d = t1.and_then(|t1| (t1 - t0).try_into().ok_or_log());
+		if let Some(d) = d {
+			self.last_point = Some((t1.unwrap(), trajectory.evaluate(d)));
 		}
-		Some((trajectory, x_fit_max_points.then_some(duration.get())))
+		Some((trajectory, t0, d))
 	}
 
 	// Returns a trajectory and a duration along it that is now immutable. The rest of the trajectory
@@ -149,7 +131,7 @@ impl InputDifferentiator {
 	pub fn add_point(
 		&mut self,
 		point: InputPoint,
-	) -> Option<((PositionTrajectory, ParamTrajectory), Option<f64>)> {
+	) -> Option<((PositionPiece, ParamTrajectory), f64, Option<Duration>)> {
 		const MIN_INTERPOLATION_INTERVAL: f64 = 0.125;
 		if let Some((last_t, _)) = self.last_point {
 			if point.t < last_t + MIN_INTERPOLATION_INTERVAL {
@@ -201,46 +183,49 @@ mod tests {
 			})
 			.is_some());
 
-		let ((traj, _), t) = differentiator
+		let ((traj, _), t0, d) = differentiator
 			.add_point(InputPoint {
 				t: 3.0,
 				x: 3.5,
 				..Default::default()
 			})
 			.unwrap();
-		assert_abs_diff_eq!(t.unwrap(), 1.0);
-		let t = Duration::clamp(t.unwrap());
-		let p = traj.evaluate(t);
+		assert_abs_diff_eq!(t0, 0.0);
+		let d = d.unwrap();
+		assert_abs_diff_eq!(d.get(), 1.0);
+		let p = traj.evaluate(d);
 		assert_abs_diff_eq!(p.position().x, 1.0, epsilon = EPSILON);
 		assert_abs_diff_eq!(p.position().y, 0.0, epsilon = EPSILON);
 		// The X velocity hasn't quite converged at this point.
 		assert_abs_diff_eq!(p.velocity().y, 0.0, epsilon = EPSILON);
 
-		let ((traj, _), t) = differentiator
+		let ((traj, _), t0, d) = differentiator
 			.add_point(InputPoint {
 				t: 4.0,
 				x: 3.5,
 				..Default::default()
 			})
 			.unwrap();
-		assert_abs_diff_eq!(t.unwrap(), 1.0);
-		let t = Duration::clamp(t.unwrap());
-		let p = traj.evaluate(t);
+		assert_abs_diff_eq!(t0, 1.0);
+		let d = d.unwrap();
+		assert_abs_diff_eq!(d.get(), 1.0);
+		let p = traj.evaluate(d);
 		assert_abs_diff_eq!(p.position().x, 2.0, epsilon = EPSILON);
 		assert_abs_diff_eq!(p.position().y, 0.0, epsilon = EPSILON);
 		assert_abs_diff_eq!(p.velocity().x, 1.0, epsilon = EPSILON);
 		assert_abs_diff_eq!(p.velocity().y, 0.0, epsilon = EPSILON);
 
-		let ((traj, _), t) = differentiator
+		let ((traj, _), t0, d) = differentiator
 			.add_point(InputPoint {
 				t: 5.0,
 				x: 5.5,
 				..Default::default()
 			})
 			.unwrap();
-		assert_abs_diff_eq!(t.unwrap(), 1.0);
-		let t = Duration::clamp(t.unwrap());
-		let p = traj.evaluate(t);
+		assert_abs_diff_eq!(t0, 2.0);
+		let d = d.unwrap();
+		assert_abs_diff_eq!(d.get(), 1.0);
+		let p = traj.evaluate(d);
 		assert_abs_diff_eq!(p.position().x, 3.0, epsilon = EPSILON);
 		assert_abs_diff_eq!(p.position().y, 0.0, epsilon = EPSILON);
 		assert_abs_diff_eq!(p.velocity().x, 1.0, epsilon = EPSILON);

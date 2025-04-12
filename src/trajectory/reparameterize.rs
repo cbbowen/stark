@@ -147,6 +147,14 @@ impl<R: Reparameterization<Piece::State>, Piece: Trajectory> ReparameterizedSpli
 	}
 }
 
+impl<R: Reparameterization<Piece::State>, Piece: Trajectory> From<Spline<Piece>>
+	for ReparameterizedSpline<R, Piece>
+{
+	fn from(value: Spline<Piece>) -> Self {
+		ReparameterizedSpline::from_spline(value)
+	}
+}
+
 impl<R: Reparameterization<Piece::State>, Piece: Trajectory> Trajectory
 	for ReparameterizedSpline<R, Piece>
 {
@@ -162,13 +170,19 @@ impl<R: Reparameterization<Piece::State>, Piece: Trajectory> Trajectory
 		(R::scale_domain(temporal_state, speed.recip()), speed)
 	}
 
-	fn control(self) -> Self::Control {
-		self.spline.control()
+	fn into_control(self) -> Self::Control {
+		self.spline.into_control()
 	}
 
 	fn from_state_and_control((state, speed): Self::State, control: Self::Control) -> Self {
 		let temporal_state = R::scale_domain(state, speed);
 		Self::from_spline(Spline::from_state_and_control(temporal_state, control))
+	}
+
+	fn into_tail(self, distance: Duration) -> Self {
+		// TODO: This could be done more efficiently.
+		let time = self.distance_to_time(distance);
+		self.spline.into_tail(time).into()
 	}
 }
 
@@ -195,7 +209,7 @@ mod tests {
 		);
 
 		assert_eq!(spline.num_pieces(), 1);
-		spline.set_control_after_time(1.0.try_into()?,0.0);
+		spline.set_control_after_time(1.0.try_into()?, 0.0);
 		assert_eq!(spline.num_pieces(), 2);
 		spline.set_control_after_time(2.0.try_into()?, 0.0);
 		assert_eq!(spline.num_pieces(), 3);
@@ -203,7 +217,7 @@ mod tests {
 		assert_eq!(spline.num_pieces(), 2);
 		spline.set_control_after_time(0.0.try_into()?, 0.0);
 		assert_eq!(spline.num_pieces(), 1);
-		
+
 		Ok(())
 	}
 

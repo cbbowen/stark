@@ -21,6 +21,7 @@ pub use result_ext::*;
 mod leptos_try;
 pub use leptos_try::*;
 
+mod color;
 mod oklab;
 pub use oklab::*;
 

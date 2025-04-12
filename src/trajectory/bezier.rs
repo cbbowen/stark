@@ -48,7 +48,7 @@ where
 		)
 	}
 
-	fn control(self) -> Self::Control {
+	fn into_control(self) -> Self::Control {
 		let t_final = self.duration_scale.recip();
 		let [_, _, p2, p3] = self.p;
 		let velocity = (p3.clone() - p2) * (3.0 * self.duration_scale);
@@ -60,6 +60,13 @@ where
 
 	fn from_state_and_control(state: Self::State, control: Self::Control) -> Self {
 		Self::interpolate(state, control.final_state, control.final_time)
+	}
+
+	fn into_tail(self, time: Duration) -> Self {
+		let t_final = self.duration_scale.recip().try_into().unwrap();
+		let p_initial = self.evaluate(time);
+		let p_final = self.evaluate(t_final);
+		Self::interpolate(p_initial, p_final, t_final - time)
 	}
 }
 

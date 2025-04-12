@@ -63,6 +63,13 @@ impl Add for Duration {
 	}
 }
 
+impl Sub for Duration {
+	type Output = f64;
+	fn sub(self, rhs: Self) -> Self::Output {
+		self.get() - rhs.get()
+	}
+}
+
 impl AddAssign for Duration {
 	fn add_assign(&mut self, rhs: Self) {
 		self.0 += rhs.get()
@@ -83,12 +90,14 @@ pub trait Trajectory {
 
 	fn evaluate(&self, duration: Duration) -> Self::State;
 
-	fn control(self) -> Self::Control;
+	fn into_control(self) -> Self::Control;
 	fn from_state_and_control(state: Self::State, control: Self::Control) -> Self;
 
 	fn initial_state(&self) -> Self::State {
 		self.evaluate(Duration::ZERO)
 	}
+
+	fn into_tail(self, time: Duration) -> Self;
 }
 
 impl<A: Trajectory, B: Trajectory> Trajectory for (A, B) {
@@ -99,8 +108,8 @@ impl<A: Trajectory, B: Trajectory> Trajectory for (A, B) {
 		(self.0.evaluate(duration), self.1.evaluate(duration))
 	}
 
-	fn control(self) -> Self::Control {
-		(self.0.control(), self.1.control())
+	fn into_control(self) -> Self::Control {
+		(self.0.into_control(), self.1.into_control())
 	}
 
 	fn from_state_and_control(state: Self::State, control: Self::Control) -> Self {
@@ -108,6 +117,12 @@ impl<A: Trajectory, B: Trajectory> Trajectory for (A, B) {
 			A::from_state_and_control(state.0, control.0),
 			B::from_state_and_control(state.1, control.1),
 		)
+	}
+
+	fn into_tail(self, time: Duration) -> Self {
+		 let a = self.0.into_tail(time);
+		 let b = self.1.into_tail(time);
+		 (a, b)
 	}
 }
 
@@ -135,7 +150,7 @@ where
 		self.state.clone() + self.velocity.clone() * duration.get()
 	}
 
-	fn control(self) -> Self::Control {
+	fn into_control(self) -> Self::Control {
 		self.velocity
 	}
 
@@ -148,6 +163,11 @@ where
 
 	fn initial_state(&self) -> Self::State {
 		self.state.clone()
+	}
+
+	fn into_tail(self, time: Duration) -> Self {
+		let state = self.evaluate(time);
+		Self { state, velocity: self.velocity }
 	}
 }
 
@@ -203,7 +223,7 @@ where
 		)
 	}
 
-	fn control(self) -> Self::Control {
+	fn into_control(self) -> Self::Control {
 		self.acceleration
 	}
 
@@ -216,6 +236,11 @@ where
 
 	fn initial_state(&self) -> Self::State {
 		self.state.clone()
+	}
+
+	fn into_tail(self, time: Duration) -> Self {
+		let state = self.evaluate(time);
+		Self { state, acceleration: self.acceleration }
 	}
 }
 
@@ -264,7 +289,7 @@ where
 		)
 	}
 
-	fn control(self) -> Self::Control {
+	fn into_control(self) -> Self::Control {
 		self.jerk
 	}
 
@@ -277,6 +302,11 @@ where
 
 	fn initial_state(&self) -> Self::State {
 		self.state.clone()
+	}
+
+	fn into_tail(self, time: Duration) -> Self {
+		let state = self.evaluate(time);
+		Self { state, jerk: self.jerk }
 	}
 }
 

@@ -59,6 +59,14 @@ https://docs.rs/wgpu-async/latest/wgpu_async
 
 Improve WASM-native parity (which is really only important for testing), consider making `WgpuContext` a wrapper around `AsyncQueue`.
 
+## WESL
+https://github.com/wgsl-tooling-wg/wesl-spec
+
+## palette (Planned)
+https://crates.io/crates/palette
+
+For color conversions. We'll still need a custom implementation in WGSL, but this can handle things on the Rust side. In particular, we could its implementation of Okhsl for the color picker.
+
 ## Alternatives considered
 
 ### Dioxus
@@ -67,3 +75,6 @@ https://docs.rs/dioxus-hooks/latest/dioxus_hooks/index.html
   * On creation (`onmounted`), we get a `web_sys::HtmlCanvasElement` that can be used to construct the surface.
   * On destruction (`dioxus::hooks::use_on_destroy`), we need to remove the surface constructed from the `web_sys::HtmlCanvasElement`.
   * On resize, we need to `configure` the surface to the `wgpu::Device`.
+
+### naga_oil
+https://github.com/bevyengine/naga_oil

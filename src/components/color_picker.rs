@@ -128,17 +128,14 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 	let configured = LocalCallback::new(configured);
 
 	let style = move || {
-		let fractions = (0..=10).map(|i| i as f32 * 0.1);
+		const SEGMENTS: i32 = 1;
+		let fractions = (0..=SEGMENTS).map(|i| i as f32 / SEGMENTS as f32);
 		let color = color.get();
-		let colors = fractions
-			.clone()
-			.map(|l| oklab_to_rgb(glam::vec3(l, color.y, color.z)));
-		let colors = colors.map(|c| {
+		let colors = fractions.clone().map(|l| {
 			format!(
-				"rgb({},{},{})",
-				(c.x.clamp(0.0, 1.0) * 255.5) as u8,
-				(c.y.clamp(0.0, 1.0) * 255.5) as u8,
-				(c.z.clamp(0.0, 1.0) * 255.5) as u8,
+				"oklab({l} {a} {b})",
+				a = color.y.clamp(-0.4, 0.4),
+				b = color.z.clamp(-0.4, 0.4),
 			)
 		});
 		let mut gradient_percents = colors
