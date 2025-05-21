@@ -22,8 +22,7 @@ mod leptos_try;
 pub use leptos_try::*;
 
 mod color;
-mod oklab;
-pub use oklab::*;
+pub use color::*;
 
 mod piecewise_linear;
 pub use piecewise_linear::*;
@@ -122,8 +121,12 @@ impl<In, Out, F: Fn(In) -> Out + 'static> From<F> for LocalCallback<In, Out> {
 }
 
 impl<In, Out> leptos::prelude::Callable<In, Out> for LocalCallback<In, Out> {
+	fn try_run(&self, input: In) -> Option<Out> {
+		self.0.try_with_value(|f| f(input))
+	}
+	
 	fn run(&self, input: In) -> Out {
-		self.0.with_value(|f| f(input))
+		self.try_run(input).unwrap()
 	}
 }
 
@@ -288,7 +291,7 @@ impl DeviceExt for wgpu::Device {
 			let slice = buffer.slice(..);
 			let (map_async_future, fulfill) = Promise::new();
 			slice.map_async(wgpu::MapMode::Read, fulfill);
-			self.poll(wgpu::Maintain::wait());
+			self.poll(wgpu::PollType::Wait);
 			map_async_future.await?;
 			Ok(slice.get_mapped_range().to_vec())
 		}

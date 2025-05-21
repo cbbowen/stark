@@ -5,7 +5,7 @@ use crate::util::DeviceExt as _;
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum WgpuContextError {
 	#[error("request adapter error")]
-	RequestAdapterError,
+	RequestAdapterError(#[from] wgpu::RequestAdapterError),
 
 	#[error("request device error {0}")]
 	RequestDeviceError(String),
@@ -38,19 +38,14 @@ impl WgpuContext {
 
 		let adapter = instance
 			.request_adapter(&wgpu::RequestAdapterOptions::default())
-			.await
-			.ok_or(WgpuContextError::RequestAdapterError)?;
+			.await?;
 		tracing::info!(?adapter);
 
 		let (device, queue) = adapter
-			.request_device(
-				&wgpu::DeviceDescriptor {
-					required_features: wgpu::Features::default()
-						| wgpu::Features::INDIRECT_FIRST_INSTANCE,
-					..Default::default()
-				},
-				None,
-			)
+			.request_device(&wgpu::DeviceDescriptor {
+				required_features: wgpu::Features::default() | wgpu::Features::INDIRECT_FIRST_INSTANCE,
+				..Default::default()
+			})
 			.await?;
 		tracing::info!(?device);
 		let device = Arc::new(device);

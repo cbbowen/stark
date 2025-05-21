@@ -11,6 +11,7 @@ use util::CoordinateSource;
 use util::LocalCallback;
 use util::PointerCapture;
 use util::SetExt;
+use palette::Oklab;
 
 const MULTISAMPLE_COUNT: u32 = 4;
 
@@ -28,7 +29,7 @@ fn create_canvas_sampler(device: &wgpu::Device) -> wgpu::Sampler {
 
 #[component]
 pub fn Canvas(
-	#[prop(into)] brush_color: Signal<Vec3>,
+	#[prop(into)] brush_color: Signal<Oklab>,
 	#[prop(into)] brush_size: Signal<f64>,
 	#[prop(into)] brush_rate: Signal<f64>,
 	#[prop(into)] brush_opacity: Signal<f64>,
@@ -306,10 +307,11 @@ pub fn Canvas(
 				let mut airbrush: std::cell::RefMut<_> = (*airbrush).borrow_mut();
 
 				let pressure = e.pressure();
+				let color = brush_color.get_untracked();
 				let input_point = InputPoint {
 					position,
 					pressure,
-					color: brush_color.get_untracked(),
+					color: glam::Vec3::from_array(color.into_components().into()),
 					size: brush_size.get_untracked() as f32,
 					opacity: brush_opacity.get_untracked() as f32,
 					rate: brush_rate.get_untracked() as f32,

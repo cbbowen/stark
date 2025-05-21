@@ -7,12 +7,13 @@ use itertools::Itertools;
 use leptos::prelude::*;
 use leptos::{component, view, IntoView};
 use std::sync::Arc;
+use palette::Oklab;
 
 #[component]
-pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
+pub fn ColorPicker(color: RwSignal<Oklab>) -> impl IntoView {
 	// Create a lens into `color`.
-	let lightness = Memo::new(move |_| color.get().x);
-	let set_lightness = move |l| color.update(|lab| lab.x = l);
+	let lightness = Memo::new(move |_| color.get().l);
+	let set_lightness = move |l| color.update(|c| c.l = l);
 
 	let context: Arc<WgpuContext> = use_context().unwrap();
 	let resources: Arc<render::Resources> = use_context().unwrap();
@@ -109,9 +110,9 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 				return;
 			};
 			let ab = (xy - glam::Vec2::new(-0.09, 0.24)) / 3.8;
-			color.update(|lab| {
-				lab.y = ab.x;
-				lab.z = ab.y;
+			color.update(|c| {
+				c.a = ab.x;
+				c.b = ab.y;
 			});
 		}
 	};
@@ -134,8 +135,8 @@ pub fn ColorPicker(color: RwSignal<glam::Vec3>) -> impl IntoView {
 		let colors = fractions.clone().map(|l| {
 			format!(
 				"oklab({l} {a} {b})",
-				a = color.y.clamp(-0.4, 0.4),
-				b = color.z.clamp(-0.4, 0.4),
+				a = color.a.clamp(-0.4, 0.4),
+				b = color.b.clamp(-0.4, 0.4),
 			)
 		});
 		let mut gradient_percents = colors

@@ -6,6 +6,7 @@ use leptos_meta::*;
 use leptos_router::components::A;
 use std::sync::Arc;
 use util::create_derived;
+use palette::Oklab;
 
 #[component]
 pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
@@ -18,7 +19,7 @@ pub fn ShaderModulesProvider(children: Children) -> impl IntoView {
 
 #[component]
 pub fn Home() -> impl IntoView {
-	let brush_color = RwSignal::new(glam::Vec3::new(0.5, 0.0, 0.0));
+	let brush_color = RwSignal::new(Oklab::from_components((0.5, 0.0, 0.0)));
 	let input_brush_size = RwSignal::new(16.0);
 	let brush_opacity = RwSignal::new(1.0);
 	let brush_rate = RwSignal::new(25.0);

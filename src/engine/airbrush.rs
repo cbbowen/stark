@@ -6,6 +6,7 @@ use crate::shaders::{self, airbrush::*};
 use crate::util::PiecewiseLinear;
 use glam::{vec2, Vec2};
 use itertools::Itertools;
+use palette::Oklab;
 use wgpu::util::DeviceExt;
 
 use super::embedded_shapes;
