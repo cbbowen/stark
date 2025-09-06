@@ -177,6 +177,7 @@ pub fn Canvas(
 							// This is what @location(0) in the fragment shader targets
 							Some(wgpu::RenderPassColorAttachment {
 								view: &surface_texture_view,
+								depth_slice: None,
 								resolve_target: Some(&view),
 								ops: wgpu::Operations {
 									load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -238,6 +239,7 @@ pub fn Canvas(
 							// This is what @location(0) in the fragment shader targets
 							Some(wgpu::RenderPassColorAttachment {
 								view: &view,
+								depth_slice: None,
 								resolve_target: None,
 								ops: wgpu::Operations {
 									load: wgpu::LoadOp::Load,

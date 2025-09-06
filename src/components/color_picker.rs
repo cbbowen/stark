@@ -6,8 +6,8 @@ use crate::{render, WgpuContext};
 use itertools::Itertools;
 use leptos::prelude::*;
 use leptos::{component, view, IntoView};
-use std::sync::Arc;
 use palette::Oklab;
+use std::sync::Arc;
 
 #[component]
 pub fn ColorPicker(color: RwSignal<Oklab>) -> impl IntoView {
@@ -81,6 +81,7 @@ pub fn ColorPicker(color: RwSignal<Oklab>) -> impl IntoView {
 						label: Some("Render Pass"),
 						color_attachments: &[Some(wgpu::RenderPassColorAttachment {
 							view: &view,
+							depth_slice: None,
 							resolve_target: None,
 							ops: wgpu::Operations {
 								load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),

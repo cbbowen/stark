@@ -10,7 +10,7 @@ itertools = "0.14"
 leptos = { version = "0.8" }
 leptos_meta = { version = "0.8" }
 leptos_router = { version = "0.8" }
-leptos-use = { git = "https://github.com/Synphonyte/leptos-use.git", branch = "leptos-0.7" }
+leptos-use = { version = "0.16" }
 # tap = "1.0"
 thiserror = "2.0"
 # This is included only so we can set the "release_max_level_warn" feature.
@@ -19,24 +19,24 @@ static_assertions = "1.1.0"
 tracing = { version = "0.1", features = ["release_max_level_warn"] }
 tracing-log = { version = "0.2", optional = true }
 tracing-subscriber = "0.3"
-wgpu = { version = "25.0", features = [
+wgpu = { version = "26.0", features = [
 	# Enable the "webgl" feature to support older browsers.
 	"webgl",
 	# We only have a single thread in WASM, so make everything Send+Sync.
 	"fragile-send-sync-non-atomic-wasm",
 ] }
 bytemuck = { version = "1.23", features = ["derive", "extern_crate_alloc"] }
-encase = { version = "0.11.0", features = ["glam"] }
+encase = { version = "0.11.2", features = ["glam"] }
 # This must match the version supported by encase.
 glam = { version = "0.30", features = ["bytemuck"] }
 wgsl_to_wgpu_macro = { path = "deps/wgsl_to_wgpu_macro", features = ["track_path"] }
-fastrand = "2.1"
+fastrand = "2.3"
 thaw = "0.5.0-beta"
 send_wrapper = "0.6"
 csscolorparser = "0.7"
 half = { version = "2.6", features = ["bytemuck"] }
 ordered-float = { version = "5.0", features = ["bytemuck"] }
-bon = "3.6"
+bon = "3.7"
 base64 = { version = "0.22", optional = true }
 derive_more = { version = "2.0", features = ["display"] }
 zune-image = { version = "0.4", default-features = false, features = [
@@ -50,13 +50,13 @@ zune-core = { version = "0.4", default-features = false }
 fresnel = "0.1"
 quadrature = "0.1"
 # Used for cubic interpolation. I also tried out `totsu` and `quadprog`, but this was the fastest and most stable.
-clarabel = { version = "0.10", default-features = false }
+clarabel = { version = "0.11", default-features = false }
 wasm-bindgen = "0.2"
 palette = "0.7"
 
 [patch.crates-io]
 # Clarabel on crates.io doesn't compile without the "serde" feature.
-# clarabel = { git = "https://github.com/cbbowen/Clarabel.rs.git" }
+clarabel = { git = "https://github.com/cbbowen/Clarabel.rs.git" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

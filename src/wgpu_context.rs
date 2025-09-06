@@ -107,7 +107,7 @@ impl WgpuContext {
 			..texture.size()
 		};
 		encoder.copy_texture_to_buffer(
-			wgpu::ImageCopyTexture {
+			wgpu::TexelCopyTextureInfo {
 				texture,
 				mip_level,
 				origin: wgpu::Origin3d {
@@ -117,9 +117,9 @@ impl WgpuContext {
 				},
 				aspect,
 			},
-			wgpu::ImageCopyBuffer {
+			wgpu::TexelCopyBufferInfo {
 				buffer: &buffer,
-				layout: wgpu::ImageDataLayout {
+				layout: wgpu::TexelCopyBufferLayout {
 					offset: 0,
 					bytes_per_row: Some(row_stride),
 					rows_per_image: Some(rows_per_image),
@@ -156,6 +156,7 @@ mod tests {
 				encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 					color_attachments: &[Some(wgpu::RenderPassColorAttachment {
 						view: &view,
+						depth_slice: None,
 						resolve_target: None,
 						ops: wgpu::Operations {
 							load: wgpu::LoadOp::Clear(wgpu::Color {

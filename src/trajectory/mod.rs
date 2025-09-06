@@ -20,6 +20,8 @@ pub enum Error {
 	SolveQPFailed,
 	#[error("quadratic program had a non-finite solution")]
 	SolveQPNotFinite,
+	#[error("failed to construct quadratic program solver")]
+	SolverError(#[from] clarabel::solver::SolverError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

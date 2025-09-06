@@ -177,7 +177,7 @@ fn solve_qp<const N: usize>(
 		..Default::default()
 	};
 
-	let mut solver = DefaultSolver::new(&p, q, &a, b, cones, settings);
+	let mut solver = DefaultSolver::new(&p, q, &a, b, cones, settings)?;
 	solver.solve();
 	match solver.solution.status {
 		SolverStatus::Solved | SolverStatus::AlmostSolved => {}

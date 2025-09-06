@@ -291,7 +291,7 @@ impl DeviceExt for wgpu::Device {
 			let slice = buffer.slice(..);
 			let (map_async_future, fulfill) = Promise::new();
 			slice.map_async(wgpu::MapMode::Read, fulfill);
-			self.poll(wgpu::PollType::Wait);
+			self.poll(wgpu::PollType::Wait)?;
 			map_async_future.await?;
 			Ok(slice.get_mapped_range().to_vec())
 		}
